@@ -1,6 +1,3 @@
-# Same pattern as the primary, but with gluetun (WireGuard/Mullvad) instead of tailscale.
-# This gives us the failover path if tailscale's exit node is flagged/blocked.
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -10,6 +7,8 @@ metadata:
     app: cobalt-backup
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: cobalt-backup
@@ -19,8 +18,6 @@ spec:
         app: cobalt-backup
     spec:
       initContainers:
-        # Gluetun fails to add IPv6 rules because k3s CNI already owns table 51820.
-        # This init container deletes the conflicting rule before gluetun starts.
         - name: fix-ipv6
           image: busybox:latest
           securityContext:
@@ -30,7 +27,6 @@ spec:
             privileged: true
           command: ["sh", "-c", "ip -6 rule del from all to all table 51820 2>/dev/null || true"]
       containers:
-        # === CONTAINER 1: gluetun sidecar ===
         - name: gluetun
           image: qmcgaw/gluetun@sha256:9f6d07e2add673c1c95a45423439a348b1e524e3ddfebd472ab94056936e62cd
           securityContext:
@@ -48,32 +44,32 @@ spec:
             - name: WIREGUARD_PRIVATE_KEY
               valueFrom:
                 secretKeyRef:
-                  name: cobalt-wireguard
+                  name: cobalt-env
                   key: WIREGUARD_PRIVATE_KEY
             - name: WIREGUARD_PUBLIC_KEY
               valueFrom:
                 secretKeyRef:
-                  name: cobalt-wireguard
+                  name: cobalt-env
                   key: WIREGUARD_PUBLIC_KEY
             - name: WIREGUARD_ADDRESSES
               valueFrom:
                 secretKeyRef:
-                  name: cobalt-wireguard
+                  name: cobalt-env
                   key: WIREGUARD_ADDRESSES
             - name: WIREGUARD_ENDPOINT_IP
               valueFrom:
                 secretKeyRef:
-                  name: cobalt-wireguard
+                  name: cobalt-env
                   key: WIREGUARD_ENDPOINT_IP
             - name: WIREGUARD_ENDPOINT_PORT
               valueFrom:
                 secretKeyRef:
-                  name: cobalt-wireguard
+                  name: cobalt-env
                   key: WIREGUARD_ENDPOINT_PORT
             - name: WIREGUARD_PERSISTENT_KEEPALIVE_INTERVAL
               valueFrom:
                 secretKeyRef:
-                  name: cobalt-wireguard
+                  name: cobalt-env
                   key: WIREGUARD_PERSISTENT_KEEPALIVE_INTERVAL
           volumeMounts:
             - name: dev-net-tun
@@ -82,8 +78,6 @@ spec:
             limits:
               memory: "128Mi"
               cpu: "500m"
-
-        # === CONTAINER 2: cobalt-api-fallback ===
         - name: cobalt-api
           image: ghcr.io/zimpatrick/cobalt:staging@sha256:7fd09b3e8a361fe1ded1cf6aa38e2be6d9dfbace37418b43125c930780cb7250
           env:
@@ -125,7 +119,6 @@ spec:
             requests:
               memory: "256Mi"
               cpu: "250m"
-
       volumes:
         - name: dev-net-tun
           hostPath:

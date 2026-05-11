@@ -1,6 +1,3 @@
-# Tailscale sidecar needs permission to read/write a Secret named "tailscale"
-# in its own namespace to store auth state.
----
 apiVersion: v1
 kind: ServiceAccount
 metadata:

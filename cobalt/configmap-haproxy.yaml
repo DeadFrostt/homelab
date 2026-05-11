@@ -1,11 +1,3 @@
-# ConfigMaps are for non-sensitive configuration files.
-# Think of them as bind mounts, but stored in the k8s API instead of the filesystem.
-# We mount this inside the HAProxy container at /usr/local/etc/haproxy/haproxy.cfg
-#
-# KEY CHANGE from docker-compose: instead of 127.0.0.1:19009 and 127.0.0.1:19010,
-# we use k8s DNS service names. In a cluster, 'cobalt-primary' and 'cobalt-backup'
-# resolve to the ClusterIP of those services automatically.
----
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -36,7 +28,5 @@ data:
       option httpchk GET /
       http-check expect status 200
       default-server inter 2s fall 2 rise 2 on-marked-down shutdown-sessions
-      # Primary path (tailscale-backed cobalt)
       server primary cobalt-primary:9000 check
-      # Fallback path (gluetun-backed cobalt)
       server fallback cobalt-backup:9000 check backup

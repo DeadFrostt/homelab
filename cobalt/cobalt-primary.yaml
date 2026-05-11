@@ -1,20 +1,3 @@
-# This is the heavy one. It defines both the Deployment AND the Service.
-#
-# DEPLOYMENT: Manages a set of identical pods.
-# - replicas: 1 (we only want one instance)
-# - template: the actual pod spec
-#
-# POD: The smallest deployable unit. Think of it as a group of containers that
-# share the same network namespace, IP address, and volumes.
-# 
-# KEY INSIGHT: In docker-compose, 'network_mode: service:tailscale_cobalt' makes
-# cobalt share tailscale's network namespace. In k8s, ANY containers in the same
-# pod automatically share the network namespace. No special config needed.
-#
-# SERVICE: Gives the pod a stable DNS name and IP address inside the cluster.
-# Other pods (like HAProxy) can reach this pod at 'cobalt-primary:9000'.
-# The service routes traffic to any pod with the matching labels.
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -24,6 +7,8 @@ metadata:
     app: cobalt-primary
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: cobalt-primary
@@ -32,16 +17,12 @@ spec:
       labels:
         app: cobalt-primary
     spec:
-      # Security context for the whole pod — allows TUN device access
       securityContext:
         sysctls:
           - name: net.ipv4.ip_forward
             value: "1"
       serviceAccountName: tailscale
       containers:
-        # === CONTAINER 1: tailscale sidecar ===
-        # Runs first (k8s starts all containers simultaneously, but tailscale
-        # needs a moment to establish the VPN tunnel before cobalt makes requests).
         - name: tailscale
           image: tailscale/tailscale:latest@sha256:dbeff02d2337344b351afac203427218c4d0a06c43fc10a865184063498472a6
           securityContext:
@@ -57,9 +38,8 @@ spec:
             - name: TS_AUTHKEY
               valueFrom:
                 secretKeyRef:
-                  name: cobalt-tailscale-auth
+                  name: cobalt-env
                   key: TS_AUTHKEY
-                  optional: true
             - name: POD_NAME
               valueFrom:
                 fieldRef:
@@ -68,7 +48,6 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.uid
-            # Don't pass TS_AUTHKEY — tailscale boots from persisted state
           volumeMounts:
             - name: tailscale-state
               mountPath: /var/lib/tailscale
@@ -78,10 +57,6 @@ spec:
             limits:
               memory: "128Mi"
               cpu: "500m"
-
-        # === CONTAINER 2: cobalt-api ===
-        # Shares the pod's network namespace with tailscale automatically.
-        # Its outbound traffic (YouTube requests) goes through the tailscale exit node.
         - name: cobalt-api
           image: ghcr.io/zimpatrick/cobalt:staging@sha256:7fd09b3e8a361fe1ded1cf6aa38e2be6d9dfbace37418b43125c930780cb7250
           env:
@@ -102,7 +77,6 @@ spec:
           ports:
             - containerPort: 9000
               name: http
-          # Liveness probe: k8s restarts the pod if this fails repeatedly.
           livenessProbe:
             httpGet:
               path: /
@@ -111,7 +85,6 @@ spec:
             periodSeconds: 30
             timeoutSeconds: 5
             failureThreshold: 2
-          # Readiness probe: k8s stops sending traffic if this fails.
           readinessProbe:
             httpGet:
               path: /
@@ -125,7 +98,6 @@ spec:
             requests:
               memory: "256Mi"
               cpu: "250m"
-
       volumes:
         - name: tailscale-state
           persistentVolumeClaim:
@@ -137,7 +109,6 @@ spec:
         - name: cobalt-files
           secret:
             secretName: cobalt-files
-            # By default, secret mounts give files mode 0644. That's fine here.
 ---
 apiVersion: v1
 kind: Service
@@ -151,4 +122,4 @@ spec:
     - port: 9000
       targetPort: 9000
       name: http
-  type: ClusterIP  # Internal-only. HAProxy reaches this by DNS name.
+  type: ClusterIP

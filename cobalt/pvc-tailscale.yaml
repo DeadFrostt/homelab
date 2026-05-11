@@ -1,19 +1,11 @@
-# PersistentVolumeClaim (PVC) asks k8s for a chunk of persistent storage.
-# k3s comes with 'local-path' storage class by default — it creates a directory
-# on the host node and bind-mounts it into the pod.
-#
-# This replaces the named volume 'tailscale_cobalt_state' from docker-compose.
-# If the pod restarts, the tailscale login state survives.
----
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: tailscale-state
   namespace: cobalt
 spec:
-  accessModes:
-    - ReadWriteOnce  # Only one pod can mount this at a time
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path
   resources:
     requests:
       storage: 100Mi
-  storageClassName: local-path  # k3s default
