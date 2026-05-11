@@ -1,0 +1,208 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gatus-config
+  namespace: gatus
+data:
+  config.yaml: |
+    web:
+      port: 8080
+
+    ui:
+      title: "The Lab"
+      header: "The Lab"
+      description: ""
+      logo: "https://cdn.deadfrost.dev/cat.png"
+      dark-mode: true
+      custom-css: "@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');:root,.dark{--background:249 22% 12%;--foreground:245 50% 91%;--card:247 23% 15%;--card-foreground:245 50% 91%;--popover:248 25% 18%;--popover-foreground:245 50% 91%;--primary:2 55% 83%;--primary-foreground:249 22% 12%;--secondary:248 25% 18%;--secondary-foreground:245 50% 91%;--muted:248 25% 18%;--muted-foreground:248 15% 61%;--accent:248 25% 18%;--accent-foreground:245 50% 91%;--destructive:343 76% 68%;--destructive-foreground:249 22% 12%;--border:245 50% 91%/.1;--input:245 50% 91%/.1;--ring:2 55% 83%;--radius:0.75rem}body,#global,.bg-background{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif!important;-webkit-font-smoothing:antialiased;background-color:#191724!important}.bg-card{background-color:#1f1d2e!important;border-color:rgba(224,222,244,.06)!important}.dashboard-container,.dashboard-container>div{background:transparent!important}.dashboard-container::before{content:'';position:fixed;top:0;left:0;right:0;bottom:0;background:radial-gradient(ellipse at top,rgba(235,188,186,.05) 0%,transparent 50%),radial-gradient(ellipse at bottom right,rgba(196,167,231,.03) 0%,transparent 40%);pointer-events:none;z-index:0}header{background:rgba(31,29,46,.8)!important;backdrop-filter:blur(12px)!important;border-bottom:1px solid rgba(224,222,244,.06)!important}header h1{font-weight:700!important;letter-spacing:-.02em}header nav a{border-radius:8px!important;transition:all .2s ease!important}header nav a:hover{background:rgba(235,188,186,.1)!important;color:#ebbcba!important}.endpoint-group{background:#1f1d2e!important;border:1px solid rgba(224,222,244,.06)!important;border-radius:16px!important;box-shadow:0 4px 24px rgba(0,0,0,.4)!important;overflow:hidden!important;margin-bottom:1.5rem!important}.endpoint-group-header{background:#26233a!important;border-bottom:1px solid rgba(224,222,244,.06)!important;padding:1rem 1.5rem!important}.endpoint-group-header span{text-transform:uppercase;letter-spacing:.1em;font-size:.9rem!important}.endpoint{background:#26233a!important;border:1px solid rgba(224,222,244,.06)!important;border-radius:12px!important;transition:all .2s ease!important}.endpoint:hover{background:rgba(235,188,186,.06)!important;border-color:rgba(235,188,186,.4)!important;transform:translateY(-2px)!important;box-shadow:0 8px 32px rgba(0,0,0,.3)!important}.endpoint-header .truncate{font-weight:600!important}.bg-green-500,.bg-green-600{background-color:#9ccfd8!important}.bg-green-700{background-color:#7eb1ba!important}span.bg-green-500,span.bg-green-600,div.bg-green-500:not(.rounded-sm),div.bg-green-600:not(.rounded-sm){background-color:rgba(156,207,216,.15)!important}.text-green-500,.text-green-600,.text-green-700{color:#9ccfd8!important}.bg-red-500,.bg-red-600{background-color:#eb6f92!important}.bg-red-700{background-color:#cd5174!important}.text-red-500,.text-red-600{color:#eb6f92!important}.bg-yellow-500,.bg-yellow-600{background-color:#f6c177!important}.text-yellow-500{color:#f6c177!important}.bg-gray-200,.dark .bg-gray-700{background-color:#21202e!important}.dark .bg-gray-800{background-color:#1f1d2e!important}.endpoint-content .rounded-sm{border-radius:4px!important;transition:transform .15s ease!important}.endpoint-content .rounded-sm:hover{transform:scaleY(1.35)!important}footer{border-top:1px solid rgba(224,222,244,.06)!important}footer a:hover{color:#ebbcba!important}::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-track{background:#191724}::-webkit-scrollbar-thumb{background:#403d52;border-radius:4px}::-webkit-scrollbar-thumb:hover{background:#524f67}::selection{background:#ebbcba;color:#191724}input,select{background:#21202e!important;border:1px solid rgba(224,222,244,.1)!important;border-radius:8px!important}input:focus,select:focus{border-color:#ebbcba!important;box-shadow:0 0 0 3px rgba(235,188,186,.15)!important;outline:none!important}header p.text-sm,header .text-muted-foreground.text-sm,.dashboard-container>div>p.text-muted-foreground{display:none!important}"
+
+    alerting:
+      webhook:
+        url: "$DISCORD_WEBHOOK_URL"
+        method: POST
+        body: '{"content":"<@370195417360629770>","embeds":[{"title":"[ENDPOINT_NAME] ([ENDPOINT_GROUP]) — [ALERT_TRIGGERED_OR_RESOLVED]","description":"[RESULT_ERRORS]"}]}'
+        default-alert:
+          enabled: true
+          failure-threshold: 3
+          success-threshold: 3
+          send-on-resolved: true
+
+    storage:
+      type: sqlite
+      path: /data/gatus-lab.db
+      caching: true
+
+    endpoints:
+      # --- Apps ---
+      - name: CouchDB
+        group: Apps
+        url: "http://10.0.0.48:5984"
+        interval: 60s
+        ui:
+          hide-url: true
+          hide-hostname: true
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: webhook
+
+      - name: Mealie
+        group: Apps
+        url: "http://10.0.0.48:9925"
+        interval: 60s
+        ui:
+          hide-url: true
+          hide-hostname: true
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: webhook
+
+      - name: SkyData API
+        group: Apps
+        url: "http://10.0.0.48:8021"
+        interval: 60s
+        ui:
+          hide-url: true
+          hide-hostname: true
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: webhook
+
+      - name: SearXNG
+        group: Apps
+        url: "http://10.0.0.48:8888"
+        interval: 60s
+        ui:
+          hide-url: true
+          hide-hostname: true
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: webhook
+
+      - name: Cobalt
+        group: Apps
+        url: "http://10.0.0.48:9009"
+        interval: 60s
+        ui:
+          hide-url: true
+          hide-hostname: true
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: webhook
+
+      - name: Authentik (Public)
+        group: Apps
+        url: "https://sso.pleasedontdmca.me"
+        interval: 60s
+        ui:
+          hide-url: true
+          hide-hostname: true
+        client:
+          ignore-redirect: true
+        conditions:
+          - "[STATUS] == any(200, 301, 302, 303)"
+        alerts:
+          - type: webhook
+
+      # --- Communication ---
+      - name: Synapse (Matrix)
+        group: Communication
+        url: "http://10.0.0.48:8999/_matrix/client/versions"
+        interval: 60s
+        ui:
+          hide-url: true
+          hide-hostname: true
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: webhook
+
+      - name: Element Web
+        group: Communication
+        url: "http://10.0.0.48:8030"
+        interval: 60s
+        ui:
+          hide-url: true
+          hide-hostname: true
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: webhook
+
+      - name: LiveKit
+        group: Communication
+        url: "http://10.0.0.48:7880"
+        interval: 60s
+        ui:
+          hide-url: true
+          hide-hostname: true
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: webhook
+
+      - name: Matrix Federation
+        group: Communication
+        url: "http://10.0.0.48:8999/_matrix/federation/v1/version"
+        interval: 60s
+        ui:
+          hide-url: true
+          hide-hostname: true
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: webhook
+
+      - name: MatrixRTC
+        group: Communication
+        url: "http://10.0.0.48:7880"
+        interval: 60s
+        ui:
+          hide-url: true
+          hide-hostname: true
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: webhook
+
+      # --- Gaming ---
+      - name: Barbieland
+        group: Gaming
+        url: "tcp://10.0.0.48:25565"
+        interval: 60s
+        ui:
+          hide-url: true
+          hide-hostname: true
+        conditions:
+          - "[CONNECTED] == true"
+        alerts:
+          - type: webhook
+
+      - name: Velocity
+        group: Gaming
+        url: "tcp://10.0.0.48:25566"
+        interval: 60s
+        ui:
+          hide-url: true
+          hide-hostname: true
+        conditions:
+          - "[CONNECTED] == true"
+        alerts:
+          - type: webhook
+
+      # --- Infrastructure ---
+      - name: Coturn
+        group: Infrastructure
+        url: "tcp://10.0.0.48:3478"
+        interval: 60s
+        ui:
+          hide-url: true
+          hide-hostname: true
+        conditions:
+          - "[CONNECTED] == true"
+        alerts:
+          - type: webhook

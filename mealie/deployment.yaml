@@ -1,0 +1,105 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mealie
+  namespace: mealie
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mealie
+  template:
+    metadata:
+      labels:
+        app: mealie
+    spec:
+      containers:
+        - name: mealie
+          image: ghcr.io/mealie-recipes/mealie:v3.12.0@sha256:8d962f611390a1cca667eed32a29e9467e9c01c523e2db3ad00f667372067f9d
+          ports:
+            - containerPort: 9000
+              name: http
+          env:
+            - name: ALLOW_SIGNUP
+              value: "false"
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            - name: TZ
+              value: "America/Anchorage"
+            - name: BASE_URL
+              value: "https://mealie.deadfrost.dev"
+            - name: OIDC_AUTH_ENABLED
+              value: "true"
+            - name: OIDC_PROVIDER_NAME
+              value: "Authentik"
+            - name: OIDC_CLIENT_ID
+              value: "yblwW3HIvVy93ZqlRdUv0uubDnJvat3PBgJzrkMh"
+            - name: OIDC_CONFIGURATION_URL
+              value: "https://sso.pleasedontdmca.me/application/o/mealie/.well-known/openid-configuration"
+            - name: OIDC_REMEMBER_ME
+              value: "true"
+            - name: SMTP_HOST
+              value: "mail.smtp2go.com"
+            - name: SMTP_PORT
+              value: "2525"
+            - name: SMTP_FROM_NAME
+              value: "Mealie"
+            - name: SMTP_AUTH_STRATEGY
+              value: "TLS"
+            - name: SMTP_FROM_EMAIL
+              value: "__SUPPORT_EMAIL__"
+            - name: SMTP_USER
+              value: "deadfrost"
+            - name: OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: mealie-env
+                  key: OIDC_CLIENT_SECRET
+            - name: SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mealie-env
+                  key: SMTP_PASSWORD
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+          livenessProbe:
+            httpGet:
+              path: /api/app/about
+              port: 9000
+            initialDelaySeconds: 20
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /api/app/about
+              port: 9000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            limits:
+              memory: "1000Mi"
+              cpu: "1000m"
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: mealie-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mealie
+  namespace: mealie
+spec:
+  selector:
+    app: mealie
+  ports:
+    - port: 9000
+      targetPort: 9000
+      nodePort: 30925
+      name: http
+  type: NodePort

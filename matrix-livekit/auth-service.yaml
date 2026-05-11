@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-service
+  namespace: matrix-livekit
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: auth-service
+  template:
+    metadata:
+      labels:
+        app: auth-service
+    spec:
+      hostname: auth-server
+      containers:
+        - name: auth-service
+          image: ghcr.io/element-hq/lk-jwt-service:latest@sha256:9c715697c6f7c1f538f2ee41b7b59b04a8d06bf790a7cc8c8517ccac8d28813d
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: LIVEKIT_JWT_BIND
+              value: ":8080"
+            - name: LIVEKIT_URL
+              value: "wss://matrixrtc.pleasedontdmca.me/livekit/sfu"
+            - name: LIVEKIT_FULL_ACCESS_HOMESERVERS
+              value: "pleasedontdmca.me"
+            - name: LIVEKIT_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: matrix-livekit-env
+                  key: LIVEKIT_KEY
+            - name: LIVEKIT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: matrix-livekit-env
+                  key: LIVEKIT_SECRET
+          resources:
+            limits:
+              memory: "128Mi"
+              cpu: "200m"
+            requests:
+              memory: "32Mi"
+              cpu: "50m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-service
+  namespace: matrix-livekit
+spec:
+  type: NodePort
+  selector:
+    app: auth-service
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      nodePort: 30070

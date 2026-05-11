@@ -1,0 +1,112 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: obsidian-livesync
+  namespace: couch-db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: obsidian-livesync
+  template:
+    metadata:
+      labels:
+        app: obsidian-livesync
+    spec:
+      containers:
+        - name: couchdb
+          image: couchdb:3.3.3
+          ports:
+            - containerPort: 5984
+              name: http
+          env:
+            - name: TZ
+              value: "America/Chicago"
+            - name: COUCHDB_USER
+              value: "obsidian_user"
+            - name: COUCHDB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: couch-db-env
+                  key: COUCHDB_PASSWORD
+          volumeMounts:
+            - name: data
+              mountPath: /opt/couchdb/data
+            - name: config
+              mountPath: /opt/couchdb/etc/local.d
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 5984
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 5984
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: couchdb-data
+        - name: config
+          persistentVolumeClaim:
+            claimName: couchdb-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: obsidian-livesync
+  namespace: couch-db
+spec:
+  selector:
+    app: obsidian-livesync
+  ports:
+    - port: 5984
+      targetPort: 5984
+      name: http
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudflared
+  namespace: couch-db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cloudflared
+  template:
+    metadata:
+      labels:
+        app: cloudflared
+    spec:
+      containers:
+        - name: cloudflared
+          image: cloudflare/cloudflared:latest
+          args:
+            - tunnel
+            - --no-autoupdate
+            - run
+          env:
+            - name: TUNNEL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: couch-db-env
+                  key: TUNNEL_TOKEN
+          resources:
+            limits:
+              memory: "128Mi"
+              cpu: "200m"
+            requests:
+              memory: "32Mi"
+              cpu: "50m"

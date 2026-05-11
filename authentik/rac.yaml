@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rac-outpost
+  namespace: authentik
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rac-outpost
+  template:
+    metadata:
+      labels:
+        app: rac-outpost
+    spec:
+      containers:
+        - name: rac
+          image: ghcr.io/goauthentik/rac:2026.2.1
+          ports:
+            - containerPort: 4822
+              name: guacd
+          env:
+            - name: AUTHENTIK_HOST
+              value: "http://authentik-server:9000"
+            - name: AUTHENTIK_INSECURE
+              value: "false"
+            - name: AUTHENTIK_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: authentik-env
+                  key: AUTHENTIK_TOKEN
+          resources:
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rac-outpost
+  namespace: authentik
+spec:
+  selector:
+    app: rac-outpost
+  ports:
+    - port: 4822
+      targetPort: 4822
+      name: guacd
+  type: ClusterIP

@@ -1,0 +1,5 @@
+# Smudge/clean filter: real values on disk, placeholders in git history.
+# Filter config lives in .git/config — see README for the two `git config` lines
+# needed on a fresh clone.
+*.yaml filter=local-scrub
+*.yml  filter=local-scrub

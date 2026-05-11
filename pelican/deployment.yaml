@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: panel
+  namespace: pelican
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: panel
+  template:
+    metadata:
+      labels:
+        app: panel
+    spec:
+      containers:
+        - name: panel
+          image: ghcr.io/pelican-dev/panel:latest
+          ports:
+            - containerPort: 80
+              name: http
+          env:
+            - name: XDG_DATA_HOME
+              value: /pelican-data
+            - name: APP_URL
+              value: "https://panel.deadfrost.dev"
+            - name: ASSET_URL
+              value: "https://panel.deadfrost.dev"
+            - name: BEHIND_PROXY
+              value: "true"
+            - name: TRUSTED_PROXIES
+              value: "0.0.0.0/0,::/0"
+            - name: ADMIN_EMAIL
+              value: "__ADMIN_EMAIL__"
+            - name: APP_ENV
+              value: "production"
+            - name: APP_DEBUG
+              value: "false"
+          envFrom:
+            - secretRef:
+                name: pelican-env
+          volumeMounts:
+            - name: data
+              mountPath: /pelican-data
+            - name: logs
+              mountPath: /var/www/html/storage/logs
+          resources:
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: pelican-data
+        - name: logs
+          persistentVolumeClaim:
+            claimName: pelican-logs
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: panel
+  namespace: pelican
+spec:
+  type: NodePort
+  selector:
+    app: panel
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      nodePort: 30180

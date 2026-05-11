@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: coturn
+  namespace: matrix-coturn
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: coturn
+  template:
+    metadata:
+      labels:
+        app: coturn
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+        - name: coturn
+          image: coturn/coturn:latest@sha256:f4c2af06c3c535c4f49d64e14d484104e7e4fcc98c4cb83d6e1544f64d1e6158
+          args: ["turnserver", "-c", "/etc/turnserver.conf"]
+          volumeMounts:
+            - name: config
+              mountPath: /etc/turnserver.conf
+              subPath: turnserver.conf
+              readOnly: true
+            - name: letsencrypt
+              mountPath: /etc/letsencrypt
+              readOnly: true
+          resources:
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+      volumes:
+        - name: config
+          hostPath:
+            path: /home/ubuntu/docker-compose/matrix/coturn
+            type: Directory
+        - name: letsencrypt
+          hostPath:
+            path: /etc/letsencrypt
+            type: Directory

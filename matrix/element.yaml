@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: element
+  namespace: matrix
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: element
+  template:
+    metadata:
+      labels:
+        app: element
+    spec:
+      containers:
+        - name: element
+          image: vectorim/element-web:latest@sha256:f4a81a24d49a9c5b97e02e77a3013ec799873e500e69041078a28be98e4f1280
+          ports:
+            - containerPort: 80
+              name: http
+          volumeMounts:
+            - name: config
+              mountPath: /app/config.json
+              subPath: element-config.json
+              readOnly: true
+          resources:
+            limits:
+              memory: "128Mi"
+              cpu: "200m"
+            requests:
+              memory: "32Mi"
+              cpu: "50m"
+      volumes:
+        - name: config
+          hostPath:
+            path: /home/ubuntu/docker-compose/matrix
+            type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: element
+  namespace: matrix
+spec:
+  type: NodePort
+  selector:
+    app: element
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      nodePort: 30030

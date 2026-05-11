@@ -1,0 +1,126 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: netdata
+  namespace: netdata
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: netdata
+  template:
+    metadata:
+      labels:
+        app: netdata
+      annotations:
+        container.apparmor.security.beta.kubernetes.io/netdata: unconfined
+    spec:
+      hostNetwork: true
+      hostPID: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+        - name: netdata
+          image: netdata/netdata@sha256:ef8f453b3e7729d19a51e4b8b5cfd0660dce619ce6b1b934126754487093660e
+          securityContext:
+            capabilities:
+              add:
+                - SYS_PTRACE
+                - SYS_ADMIN
+          volumeMounts:
+            - name: netdataconfig
+              mountPath: /etc/netdata
+            - name: netdatalib
+              mountPath: /var/lib/netdata
+            - name: netdatacache
+              mountPath: /var/cache/netdata
+            - name: host-root
+              mountPath: /host/root
+              readOnly: true
+              mountPropagation: HostToContainer
+            - name: host-passwd
+              mountPath: /host/etc/passwd
+              readOnly: true
+            - name: host-group
+              mountPath: /host/etc/group
+              readOnly: true
+            - name: localtime
+              mountPath: /etc/localtime
+              readOnly: true
+            - name: host-proc
+              mountPath: /host/proc
+              readOnly: true
+            - name: host-sys
+              mountPath: /host/sys
+              readOnly: true
+            - name: host-os-release
+              mountPath: /host/etc/os-release
+              readOnly: true
+            - name: host-log
+              mountPath: /host/var/log
+              readOnly: true
+            - name: docker-sock
+              mountPath: /var/run/docker.sock
+              readOnly: true
+            - name: dbus
+              mountPath: /run/dbus
+              readOnly: true
+          resources:
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+      volumes:
+        - name: netdataconfig
+          hostPath:
+            path: /var/lib/docker/volumes/netdata_netdataconfig/_data
+            type: Directory
+        - name: netdatalib
+          hostPath:
+            path: /var/lib/docker/volumes/netdata_netdatalib/_data
+            type: Directory
+        - name: netdatacache
+          hostPath:
+            path: /var/lib/docker/volumes/netdata_netdatacache/_data
+            type: Directory
+        - name: host-root
+          hostPath:
+            path: /
+            type: Directory
+        - name: host-passwd
+          hostPath:
+            path: /etc/passwd
+            type: File
+        - name: host-group
+          hostPath:
+            path: /etc/group
+            type: File
+        - name: localtime
+          hostPath:
+            path: /etc/localtime
+            type: File
+        - name: host-proc
+          hostPath:
+            path: /proc
+            type: Directory
+        - name: host-sys
+          hostPath:
+            path: /sys
+            type: Directory
+        - name: host-os-release
+          hostPath:
+            path: /etc/os-release
+            type: File
+        - name: host-log
+          hostPath:
+            path: /var/log
+            type: Directory
+        - name: docker-sock
+          hostPath:
+            path: /var/run/docker.sock
+            type: Socket
+        - name: dbus
+          hostPath:
+            path: /run/dbus
+            type: Directory

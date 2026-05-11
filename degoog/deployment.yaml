@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: degoog
+  namespace: degoog
+  labels:
+    app: degoog
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: degoog
+  template:
+    metadata:
+      labels:
+        app: degoog
+    spec:
+      containers:
+        - name: degoog
+          image: ghcr.io/fccview/degoog:latest@sha256:5ce869bfb030b16d866b1524dae957370f27be6add9bdd7409bac7cdd46979ce
+          ports:
+            - containerPort: 4444
+              name: http
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+          livenessProbe:
+            tcpSocket:
+              port: 4444
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            tcpSocket:
+              port: 4444
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: degoog-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: degoog
+  namespace: degoog
+spec:
+  selector:
+    app: degoog
+  ports:
+    - port: 4444
+      targetPort: 4444
+      nodePort: 30444
+      name: http
+  type: NodePort

@@ -1,0 +1,42 @@
+# Local overrides
+**/*.local.yaml
+**/*.local.yml
+**/kustomization.local.yaml
+
+# Plain Kubernetes Secret manifests
+**/secret-values.yaml
+**/secret-values.yml
+**/raw-secret*.yaml
+**/raw-secret*.yml
+
+# Env files in any form
+.env
+.env.*
+**/*.env
+!**/*.env.example
+
+# Backups produced by migration scripts
+**/*.bak
+**/*.sql
+**/*.sql.gz
+**/*.dump
+**/backup-*/
+**/migration-backup/
+
+# kubeconfig and credentials accidentally dropped into the tree
+kubeconfig
+kubeconfig.*
+*.kubeconfig
+auth.json
+
+# OS / editor noise
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+# kustomize build artifacts
+charts/
+dist/
+build/

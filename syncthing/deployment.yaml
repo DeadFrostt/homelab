@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: syncthing
+  namespace: syncthing
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: syncthing
+  template:
+    metadata:
+      labels:
+        app: syncthing
+    spec:
+      hostname: yeager
+      securityContext:
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+      containers:
+        - name: syncthing
+          image: syncthing/syncthing:latest@sha256:4a961394ca471f4e48f31ad2cef50697e502c8799e2e98477a1c3844e0c5bc54
+          env:
+            - name: PUID
+              value: "1001"
+            - name: PGID
+              value: "1001"
+          ports:
+            - containerPort: 8384
+              name: web-ui
+            - containerPort: 22000
+              hostPort: 22000
+              protocol: TCP
+              name: sync-tcp
+            - containerPort: 22000
+              hostPort: 22000
+              protocol: UDP
+              name: sync-udp
+            - containerPort: 21027
+              hostPort: 21027
+              protocol: UDP
+              name: discovery
+          volumeMounts:
+            - name: config
+              mountPath: /var/syncthing/config
+            - name: data
+              mountPath: /var/syncthing/data
+          livenessProbe:
+            httpGet:
+              path: /rest/noauth/health
+              port: 8384
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /rest/noauth/health
+              port: 8384
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+      volumes:
+        - name: config
+          hostPath:
+            path: /home/ubuntu/docker-compose/syncthing/config
+            type: Directory
+        - name: data
+          hostPath:
+            path: /home/ubuntu
+            type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: syncthing
+  namespace: syncthing
+spec:
+  selector:
+    app: syncthing
+  ports:
+    - port: 8384
+      targetPort: 8384
+      nodePort: 30384
+      name: web-ui
+  type: NodePort

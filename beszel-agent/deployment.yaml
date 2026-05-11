@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: beszel-agent
+  namespace: beszel-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: beszel-agent
+  template:
+    metadata:
+      labels:
+        app: beszel-agent
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+        - name: beszel-agent
+          image: henrygd/beszel-agent@sha256:8874e2c53f9de5e063a6a80d6b617e20fa593ac5dc4eb4c6ce1f912f510f38f8
+          env:
+            - name: LISTEN
+              value: "45876"
+            - name: KEY
+              valueFrom:
+                secretKeyRef:
+                  name: beszel-agent-env
+                  key: BESZEL_KEY
+            - name: TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: beszel-agent-env
+                  key: BESZEL_TOKEN
+            - name: HUB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: beszel-agent-env
+                  key: HUB_URL
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/beszel-agent
+            - name: docker-sock
+              mountPath: /var/run/docker.sock
+              readOnly: true
+          resources:
+            limits:
+              memory: "128Mi"
+              cpu: "200m"
+            requests:
+              memory: "32Mi"
+              cpu: "50m"
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: beszel-agent-data
+        - name: docker-sock
+          hostPath:
+            path: /var/run/docker.sock
+            type: Socket

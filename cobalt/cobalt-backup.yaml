@@ -1,0 +1,150 @@
+# Same pattern as the primary, but with gluetun (WireGuard/Mullvad) instead of tailscale.
+# This gives us the failover path if tailscale's exit node is flagged/blocked.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cobalt-backup
+  namespace: cobalt
+  labels:
+    app: cobalt-backup
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cobalt-backup
+  template:
+    metadata:
+      labels:
+        app: cobalt-backup
+    spec:
+      initContainers:
+        # Gluetun fails to add IPv6 rules because k3s CNI already owns table 51820.
+        # This init container deletes the conflicting rule before gluetun starts.
+        - name: fix-ipv6
+          image: busybox:latest
+          securityContext:
+            capabilities:
+              add:
+                - NET_ADMIN
+            privileged: true
+          command: ["sh", "-c", "ip -6 rule del from all to all table 51820 2>/dev/null || true"]
+      containers:
+        # === CONTAINER 1: gluetun sidecar ===
+        - name: gluetun
+          image: qmcgaw/gluetun@sha256:9f6d07e2add673c1c95a45423439a348b1e524e3ddfebd472ab94056936e62cd
+          securityContext:
+            capabilities:
+              add:
+                - NET_ADMIN
+            privileged: true
+          env:
+            - name: VPN_SERVICE_PROVIDER
+              value: "custom"
+            - name: VPN_TYPE
+              value: "wireguard"
+            - name: BLOCK_IPV6
+              value: "on"
+            - name: WIREGUARD_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: cobalt-wireguard
+                  key: WIREGUARD_PRIVATE_KEY
+            - name: WIREGUARD_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: cobalt-wireguard
+                  key: WIREGUARD_PUBLIC_KEY
+            - name: WIREGUARD_ADDRESSES
+              valueFrom:
+                secretKeyRef:
+                  name: cobalt-wireguard
+                  key: WIREGUARD_ADDRESSES
+            - name: WIREGUARD_ENDPOINT_IP
+              valueFrom:
+                secretKeyRef:
+                  name: cobalt-wireguard
+                  key: WIREGUARD_ENDPOINT_IP
+            - name: WIREGUARD_ENDPOINT_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: cobalt-wireguard
+                  key: WIREGUARD_ENDPOINT_PORT
+            - name: WIREGUARD_PERSISTENT_KEEPALIVE_INTERVAL
+              valueFrom:
+                secretKeyRef:
+                  name: cobalt-wireguard
+                  key: WIREGUARD_PERSISTENT_KEEPALIVE_INTERVAL
+          volumeMounts:
+            - name: dev-net-tun
+              mountPath: /dev/net/tun
+          resources:
+            limits:
+              memory: "128Mi"
+              cpu: "500m"
+
+        # === CONTAINER 2: cobalt-api-fallback ===
+        - name: cobalt-api
+          image: ghcr.io/zimpatrick/cobalt:staging@sha256:7fd09b3e8a361fe1ded1cf6aa38e2be6d9dfbace37418b43125c930780cb7250
+          env:
+            - name: API_URL
+              value: "https://cobalt.pleasedontdmca.me/"
+            - name: CUSTOM_INNERTUBE_CLIENT
+              value: "WEB_EMBEDDED"
+            - name: COOKIE_PATH
+              value: /cookies.json
+          volumeMounts:
+            - name: cobalt-files
+              mountPath: /cookies.json
+              subPath: cookies.json
+            - name: cobalt-files
+              mountPath: /keys.json
+              subPath: keys.json
+              readOnly: true
+          ports:
+            - containerPort: 9000
+              name: http
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 9000
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 2
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 9000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            limits:
+              memory: "512Mi"
+              cpu: "1000m"
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+
+      volumes:
+        - name: dev-net-tun
+          hostPath:
+            path: /dev/net/tun
+            type: CharDevice
+        - name: cobalt-files
+          secret:
+            secretName: cobalt-files
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cobalt-backup
+  namespace: cobalt
+spec:
+  selector:
+    app: cobalt-backup
+  ports:
+    - port: 9000
+      targetPort: 9000
+      name: http
+  type: ClusterIP

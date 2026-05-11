@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: synapse-admin
+  namespace: matrix
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: synapse-admin
+  template:
+    metadata:
+      labels:
+        app: synapse-admin
+    spec:
+      containers:
+        - name: synapse-admin
+          image: awesometechnologies/synapse-admin:latest@sha256:a1c1f4662875f51ff1ca556a9eb7c802d9bc40ef58747b9efc163b42da3ad416
+          ports:
+            - containerPort: 80
+              name: http
+          resources:
+            limits:
+              memory: "128Mi"
+              cpu: "200m"
+            requests:
+              memory: "32Mi"
+              cpu: "50m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: synapse-admin
+  namespace: matrix
+spec:
+  type: NodePort
+  selector:
+    app: synapse-admin
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      nodePort: 30081

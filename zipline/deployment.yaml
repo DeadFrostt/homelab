@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zipline
+  namespace: zipline
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zipline
+  template:
+    metadata:
+      labels:
+        app: zipline
+    spec:
+      containers:
+        - name: zipline
+          image: ghcr.io/diced/zipline:latest@sha256:ac1757a5973f1dcbe015466caef9249439b6f539ea605fad6c4e00a37fdb3bf5
+          ports:
+            - containerPort: 3000
+              name: http
+          env:
+            - name: POSTGRESQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: zipline-env
+                  key: POSTGRESQL_PASSWORD
+            - name: DATABASE_URL
+              value: "postgres://zipline:$(POSTGRESQL_PASSWORD)@postgresql:5432/zipline"
+            - name: CORE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: zipline-env
+                  key: CORE_SECRET
+          volumeMounts:
+            - name: uploads
+              mountPath: /zipline/uploads
+            - name: public
+              mountPath: /zipline/public
+            - name: themes
+              mountPath: /zipline/themes
+          livenessProbe:
+            httpGet:
+              path: /api/healthcheck
+              port: 3000
+            initialDelaySeconds: 20
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /api/healthcheck
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+      volumes:
+        - name: uploads
+          persistentVolumeClaim:
+            claimName: zipline-uploads
+        - name: public
+          persistentVolumeClaim:
+            claimName: zipline-public
+        - name: themes
+          persistentVolumeClaim:
+            claimName: zipline-themes
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zipline
+  namespace: zipline
+spec:
+  selector:
+    app: zipline
+  ports:
+    - port: 3000
+      targetPort: 3000
+      nodePort: 30003
+      name: http
+  type: NodePort

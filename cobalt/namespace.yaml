@@ -1,0 +1,7 @@
+# Namespaces are like virtual clusters.
+# They isolate resources so services in 'cobalt' can't accidentally talk to services in 'matrix' unless you explicitly allow it.
+# Think of it like a Docker network, but for everything (pods, secrets, configmaps, etc.).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cobalt
