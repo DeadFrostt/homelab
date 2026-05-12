@@ -41,6 +41,8 @@ spec:
               value: "wireguard"
             - name: BLOCK_IPV6
               value: "on"
+            - name: FIREWALL_OUTBOUND_SUBNETS
+              value: "10.0.0.0/24,10.42.0.0/16,10.43.0.0/16"
             - name: WIREGUARD_PRIVATE_KEY
               valueFrom:
                 secretKeyRef:
@@ -78,6 +80,9 @@ spec:
             limits:
               memory: "128Mi"
               cpu: "500m"
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
         - name: cobalt-api
           image: ghcr.io/zimpatrick/cobalt:staging@sha256:7fd09b3e8a361fe1ded1cf6aa38e2be6d9dfbace37418b43125c930780cb7250
           env:
@@ -99,17 +104,15 @@ spec:
             - containerPort: 9000
               name: http
           livenessProbe:
-            httpGet:
-              path: /
-              port: 9000
+            exec:
+              command: ["wget", "-q", "-O-", "--timeout=4", "http://127.0.0.1:9000/"]
             initialDelaySeconds: 10
             periodSeconds: 30
             timeoutSeconds: 5
-            failureThreshold: 2
+            failureThreshold: 3
           readinessProbe:
-            httpGet:
-              path: /
-              port: 9000
+            exec:
+              command: ["wget", "-q", "-O-", "--timeout=4", "http://127.0.0.1:9000/"]
             initialDelaySeconds: 5
             periodSeconds: 10
           resources:
