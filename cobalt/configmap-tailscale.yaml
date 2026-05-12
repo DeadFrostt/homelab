@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cobalt-tailscale-config
+  namespace: cobalt
+data:
+  TS_EXTRA_ARGS: "--exit-node=100.104.245.10 --exit-node-allow-lan-access=true --accept-routes --accept-risk=linux-strict-rp-filter"

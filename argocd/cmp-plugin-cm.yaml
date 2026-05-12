@@ -14,7 +14,7 @@ data:
       generate:
         command: [sh, -c]
         args:
-          - 'if [ -f kustomization.yaml ]; then kustomize build --enable-helm .; else for f in *.yaml; do printf "\n---\n"; cat "$f"; done; fi | sed "s|__TAILSCALE_HOST__|${TAILSCALE_HOST}|g"'
+          - 'if [ -f kustomization.yaml ]; then kustomize build --enable-helm .; else for f in *.yaml; do printf "\n---\n"; cat "$f"; done; fi'
       discover:
         find:
           command: [sh, -c, "ls *.yaml 2>/dev/null | head -1"]

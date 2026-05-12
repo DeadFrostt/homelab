@@ -16,12 +16,6 @@ spec:
         - name: kustomize-envsubst
           image: quay.io/argoproj/argocd:v3.1.0
           command: [/var/run/argocd/argocd-cmp-server]
-          env:
-            - name: TAILSCALE_HOST
-              valueFrom:
-                secretKeyRef:
-                  name: argocd-tailscale-host
-                  key: TAILSCALE_HOST
           securityContext:
             runAsNonRoot: true
             runAsUser: 999
