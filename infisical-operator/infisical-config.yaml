@@ -9,4 +9,4 @@ metadata:
   name: infisical-config
   namespace: infisical-operator-system
 data:
-  hostAPI: "https://__TAILSCALE_HOST__:8200/api"
+  hostAPI: "http://10.0.0.48:8200/api"
