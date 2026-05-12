@@ -3,6 +3,7 @@ kind: Kustomization
 namespace: cobalt
 resources:
   - namespace.yaml
+  - networkpolicy.yaml
   - infisical-secret.yaml
   - rbac-tailscale.yaml
   - pvc-tailscale.yaml

@@ -1,12 +1,11 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: postgresql
   namespace: authentik
 spec:
   replicas: 1
-  strategy:
-    type: Recreate
+  serviceName: postgresql
   selector:
     matchLabels:
       app: postgresql

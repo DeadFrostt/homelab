@@ -3,6 +3,7 @@ kind: Kustomization
 namespace: beszel-agent
 resources:
   - namespace.yaml
+  - networkpolicy.yaml
   - secret.yaml
   - pvc.yaml
   - deployment.yaml

@@ -3,6 +3,7 @@ kind: Kustomization
 namespace: zipline
 resources:
   - namespace.yaml
+  - networkpolicy.yaml
   - infisical-secret.yaml
   - pvc.yaml
   - postgres.yaml

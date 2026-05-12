@@ -3,7 +3,8 @@ kind: Kustomization
 namespace: infisical
 resources:
   - namespace.yaml
-  - secret.yaml
+  - networkpolicy.yaml
+  - raw-secret.yaml
   - postgres.yaml
   - redis.yaml
   - backend.yaml

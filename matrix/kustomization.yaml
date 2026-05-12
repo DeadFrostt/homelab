@@ -3,6 +3,7 @@ kind: Kustomization
 namespace: matrix
 resources:
   - namespace.yaml
+  - networkpolicy.yaml
   - infisical-secret.yaml
   - pvc.yaml
   - postgres.yaml

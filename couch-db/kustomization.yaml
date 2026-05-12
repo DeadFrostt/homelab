@@ -3,6 +3,7 @@ kind: Kustomization
 namespace: couch-db
 resources:
   - namespace.yaml
+  - networkpolicy.yaml
   - infisical-secret.yaml
   - pvc.yaml
   - deployment.yaml

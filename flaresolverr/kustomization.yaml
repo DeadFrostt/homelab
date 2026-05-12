@@ -3,5 +3,6 @@ kind: Kustomization
 namespace: flaresolverr
 resources:
   - namespace.yaml
+  - networkpolicy.yaml
   - pvc.yaml
   - deployment.yaml

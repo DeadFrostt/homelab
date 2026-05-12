@@ -3,6 +3,7 @@ kind: Kustomization
 namespace: pelican
 resources:
   - namespace.yaml
+  - networkpolicy.yaml
   - infisical-secret.yaml
   - pvc.yaml
   - deployment.yaml

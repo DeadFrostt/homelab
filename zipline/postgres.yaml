@@ -1,10 +1,11 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: postgresql
   namespace: zipline
 spec:
   replicas: 1
+  serviceName: postgresql
   selector:
     matchLabels:
       app: postgresql

@@ -1,0 +1,137 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: cobalt
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: cobalt
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+# HAProxy proxy can reach primary and backup cobalt APIs
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-cobalt-primary-ingress
+  namespace: cobalt
+spec:
+  podSelector:
+    matchLabels:
+      app: cobalt-primary
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: cobalt-proxy
+      ports:
+        - protocol: TCP
+          port: 9000
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-cobalt-backup-ingress
+  namespace: cobalt
+spec:
+  podSelector:
+    matchLabels:
+      app: cobalt-backup
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: cobalt-proxy
+      ports:
+        - protocol: TCP
+          port: 9000
+---
+# HAProxy proxy ingress + egress
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-cobalt-proxy
+  namespace: cobalt
+spec:
+  podSelector:
+    matchLabels:
+      app: cobalt-proxy
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: 9009
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: cobalt-primary
+      ports:
+        - protocol: TCP
+          port: 9000
+    - to:
+        - podSelector:
+            matchLabels:
+              app: cobalt-backup
+      ports:
+        - protocol: TCP
+          port: 9000
+---
+# Primary cobalt needs broad egress (Tailscale + media APIs)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-cobalt-primary-egress
+  namespace: cobalt
+spec:
+  podSelector:
+    matchLabels:
+      app: cobalt-primary
+  policyTypes:
+    - Egress
+  egress:
+    - {}
+---
+# Backup cobalt uses gluetun VPN for egress
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-cobalt-backup-egress
+  namespace: cobalt
+spec:
+  podSelector:
+    matchLabels:
+      app: cobalt-backup
+  policyTypes:
+    - Egress
+  egress:
+    - {}

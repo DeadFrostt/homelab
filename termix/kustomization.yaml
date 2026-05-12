@@ -3,5 +3,6 @@ kind: Kustomization
 namespace: termix
 resources:
   - namespace.yaml
+  - networkpolicy.yaml
   - pvc.yaml
   - deployment.yaml

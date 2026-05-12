@@ -12,14 +12,13 @@ spec:
   storageClassName: local-path
 ---
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: postgres
   namespace: infisical
 spec:
   replicas: 1
-  strategy:
-    type: Recreate
+  serviceName: postgres
   selector:
     matchLabels:
       app: postgres
