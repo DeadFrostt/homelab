@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argocd-repo-server
+  namespace: argocd
+spec:
+  template:
+    spec:
+      volumes:
+        - name: cmp-plugin
+          configMap:
+            name: cmp-plugin-kustomize-envsubst
+        - name: cmp-tmp
+          emptyDir: {}
+      containers:
+        - name: kustomize-envsubst
+          image: quay.io/argoproj/argocd:v3.1.0
+          command: [/var/run/argocd/argocd-cmp-server]
+          env:
+            - name: TAILSCALE_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: argocd-tailscale-host
+                  key: TAILSCALE_HOST
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 999
+          volumeMounts:
+            - name: var-files
+              mountPath: /var/run/argocd
+            - name: plugins
+              mountPath: /home/argocd/cmp-server/plugins
+            - name: cmp-plugin
+              mountPath: /home/argocd/cmp-server/config/plugin.yaml
+              subPath: plugin.yaml
+            - name: cmp-tmp
+              mountPath: /tmp

@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cmp-plugin-kustomize-envsubst
+  namespace: argocd
+data:
+  plugin.yaml: |
+    apiVersion: argoproj.io/v1alpha1
+    kind: ConfigManagementPlugin
+    metadata:
+      name: kustomize-envsubst
+    spec:
+      version: v1.0
+      generate:
+        command: [sh, -c]
+        args:
+          - 'if [ -f kustomization.yaml ]; then kustomize build --enable-helm .; else for f in *.yaml; do printf "\n---\n"; cat "$f"; done; fi | sed "s|__TAILSCALE_HOST__|${TAILSCALE_HOST}|g"'
+      discover:
+        find:
+          command: [sh, -c, "ls *.yaml 2>/dev/null | head -1"]

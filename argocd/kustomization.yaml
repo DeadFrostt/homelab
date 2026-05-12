@@ -3,10 +3,15 @@ kind: Kustomization
 namespace: argocd
 resources:
   - namespace.yaml
-  - https://raw.githubusercontent.com/argoproj/argo-cd/v2.13.2/manifests/install.yaml
+  - https://raw.githubusercontent.com/argoproj/argo-cd/v3.1.0/manifests/install.yaml
   - applicationset.yaml
+  - cmp-plugin-cm.yaml
 patches:
   - path: server-nodeport.yaml
     target:
       kind: Service
       name: argocd-server
+  - path: repo-server-patch.yaml
+    target:
+      kind: Deployment
+      name: argocd-repo-server

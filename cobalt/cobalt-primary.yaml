@@ -32,7 +32,7 @@ spec:
                 - SYS_MODULE
           env:
             - name: TS_EXTRA_ARGS
-              value: "--exit-node=__TAILSCALE_EXIT_IP__ --exit-node-allow-lan-access=true --accept-routes --accept-risk=linux-strict-rp-filter"
+              value: "--exit-node=100.104.245.10 --exit-node-allow-lan-access=true --accept-routes --accept-risk=linux-strict-rp-filter"
             - name: TS_STATE_DIR
               value: /var/lib/tailscale
             - name: TS_AUTHKEY
@@ -57,6 +57,9 @@ spec:
             limits:
               memory: "128Mi"
               cpu: "500m"
+            requests:
+              memory: "64Mi"
+              cpu: "100m"
         - name: cobalt-api
           image: ghcr.io/zimpatrick/cobalt:staging@sha256:7fd09b3e8a361fe1ded1cf6aa38e2be6d9dfbace37418b43125c930780cb7250
           env:

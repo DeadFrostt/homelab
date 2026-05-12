@@ -23,6 +23,8 @@ spec:
         repoURL: https://github.com/DeadFrostt/homelab.git
         targetRevision: main
         path: "{{.path.path}}"
+        plugin:
+          name: kustomize-envsubst-v1.0
       destination:
         server: https://kubernetes.default.svc
         namespace: "{{.path.basename}}"
