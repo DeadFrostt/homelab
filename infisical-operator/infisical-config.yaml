@@ -9,4 +9,4 @@ metadata:
   name: infisical-config
   namespace: infisical-operator-system
 data:
-  hostAPI: "http://10.0.0.48:8200/api"
+  hostAPI: "http://infisical.infisical.svc.cluster.local:8080/api"

@@ -37,6 +37,10 @@ spec:
                 secretKeyRef:
                   name: matrix-livekit-env
                   key: LIVEKIT_SECRET
+          volumeMounts:
+            - name: ca-certs
+              mountPath: /etc/ssl/certs
+              readOnly: true
           resources:
             limits:
               memory: "128Mi"
@@ -44,6 +48,11 @@ spec:
             requests:
               memory: "32Mi"
               cpu: "50m"
+      volumes:
+        - name: ca-certs
+          hostPath:
+            path: /etc/ssl/certs
+            type: Directory
 ---
 apiVersion: v1
 kind: Service

@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: infisical
+  namespace: infisical
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: infisical
+  template:
+    metadata:
+      labels:
+        app: infisical
+    spec:
+      containers:
+        - name: infisical
+          image: infisical/infisical:latest@sha256:84e8e0f29e920e8f0072025ea9acd96793405b2528bc0f4842b0f4d6eb564888
+          ports:
+            - containerPort: 8080
+              name: http
+          envFrom:
+            - secretRef:
+                name: infisical-env
+          livenessProbe:
+            httpGet:
+              path: /api/status
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /api/status
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: infisical
+  namespace: infisical
+spec:
+  type: NodePort
+  selector:
+    app: infisical
+  ports:
+    - port: 8080
+      targetPort: 8080
+      nodePort: 30820
+      name: http
