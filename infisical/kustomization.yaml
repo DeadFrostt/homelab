@@ -4,7 +4,6 @@ namespace: infisical
 resources:
   - namespace.yaml
   - networkpolicy.yaml
-  - raw-secret.yaml
   - postgres.yaml
   - redis.yaml
   - backend.yaml
