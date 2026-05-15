@@ -12,6 +12,8 @@ spec:
         revision: main
         directories:
           - path: "*"
+          - path: airpipe
+            exclude: true
           - path: argocd
             exclude: true
   template:
