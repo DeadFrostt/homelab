@@ -14,7 +14,7 @@ spec:
           emptyDir: {}
       containers:
         - name: kustomize-envsubst
-          image: quay.io/argoproj/argocd:v3.1.0
+          image: quay.io/argoproj/argocd:v3.4.2
           command: [/var/run/argocd/argocd-cmp-server]
           securityContext:
             runAsNonRoot: true
