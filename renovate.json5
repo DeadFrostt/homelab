@@ -122,13 +122,26 @@
     },
 
     {
-      // Apps run different majors (14/16/17) — keep majors visible.
+      // Only minor/patch within the pinned major.
       matchPackageNames: ["postgres"],
       groupName: "postgres",
       commitMessageTopic: "Postgres",
-      separateMajorMinor: true,
+      matchUpdateTypes: ["major"],
+      enabled: false,
+    },
+    {
+      matchPackageNames: ["postgres"],
+      groupName: "postgres",
+      commitMessageTopic: "Postgres",
     },
 
+    {
+      // Redis 8 is the current pin — majors have RESP/persistence changes
+      // worth a human review, so don't auto-major.
+      matchPackageNames: ["redis"],
+      matchUpdateTypes: ["major"],
+      enabled: false,
+    },
     {
       matchPackageNames: ["redis"],
       groupName: "redis",
@@ -136,10 +149,72 @@
     },
 
     {
-      // 4.x is a different beast from 3.x — keep majors visible.
+      // Lock major; bump 3.x patch/minor only.
+      matchPackageNames: ["couchdb"],
+      matchUpdateTypes: ["major"],
+      enabled: false,
+    },
+    {
       matchPackageNames: ["couchdb"],
       groupName: "couchdb",
-      separateMajorMinor: true,
+      commitMessageTopic: "CouchDB",
+    },
+
+    {
+      // cobalt's haproxy.cfg is written against 3.x syntax
+      matchPackageNames: ["haproxy"],
+      matchUpdateTypes: ["major"],
+      enabled: false,
+    },
+
+    {
+      // Argo CD majors regularly change CRDs/RBAC — require human review.
+      matchPackageNames: [
+        "argoproj/argo-cd",
+        "quay.io/argoproj/argocd",
+      ],
+      matchUpdateTypes: ["major"],
+      dependencyDashboardApproval: true,
+    },
+
+    {
+      // Velero chart majors can require CRD upgrades
+      matchPackageNames: [
+        "velero",
+        "velero/velero-plugin-for-aws",
+      ],
+      matchUpdateTypes: ["major"],
+      dependencyDashboardApproval: true,
+    },
+
+    {
+      // Synapse and Element majors occasionally drop migration paths
+      matchPackageNames: [
+        "matrixdotorg/synapse",
+        "vectorim/element-web",
+        "livekit/livekit-server",
+      ],
+      matchUpdateTypes: ["major"],
+      dependencyDashboardApproval: true,
+    },
+
+    {
+      // Infisical schema migrations baked into the image.
+      matchPackageNames: ["infisical/infisical"],
+      matchUpdateTypes: ["major"],
+      dependencyDashboardApproval: true,
+    },
+
+    {
+      // Authentik is calendar-versioned (2026.2.2). Renovate treats the
+      // year as the major — letting it auto-bump would push us across
+      // breaking releases. Hold majors (year rollovers) for review.
+      matchPackageNames: [
+        "ghcr.io/goauthentik/server",
+        "ghcr.io/goauthentik/rac",
+      ],
+      matchUpdateTypes: ["major"],
+      dependencyDashboardApproval: true,
     },
 
     {
