@@ -64,7 +64,7 @@ spec:
               memory: "64Mi"
               cpu: "100m"
         - name: cobalt-api
-          image: ghcr.io/zimpatrick/cobalt:staging@sha256:7fd09b3e8a361fe1ded1cf6aa38e2be6d9dfbace37418b43125c930780cb7250
+          image: ghcr.io/zimpatrick/cobalt:staging@sha256:eaa35c2735ee83f3ee05ccf294cedf1e93c1264bc49f24e13e8df5fb564fd1a1
           env:
             - name: API_URL
               value: "https://cobalt.pleasedontdmca.me/"
