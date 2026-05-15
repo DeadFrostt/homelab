@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: degoog
-          image: ghcr.io/fccview/degoog:latest@sha256:5ce869bfb030b16d866b1524dae957370f27be6add9bdd7409bac7cdd46979ce
+          image: ghcr.io/fccview/degoog:latest@sha256:3cabee5c06ac9774fa5d993cc3a146c59777ec6f5e12e91dd2288ea9160a8265
           ports:
             - containerPort: 4444
               name: http
