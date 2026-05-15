@@ -149,12 +149,6 @@
     },
 
     {
-      // Lock major; bump 3.x patch/minor only.
-      matchPackageNames: ["couchdb"],
-      matchUpdateTypes: ["major"],
-      enabled: false,
-    },
-    {
       matchPackageNames: ["couchdb"],
       groupName: "couchdb",
       commitMessageTopic: "CouchDB",
