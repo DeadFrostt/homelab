@@ -1,0 +1,215 @@
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticCommits",
+    ":timezone(America/New_York)",
+    "helpers:pinGitHubActionDigests",
+  ],
+
+  schedule: ["after 2am and before 7am every weekday", "every weekend"],
+  prHourlyLimit: 4,
+  prConcurrentLimit: 20,
+
+  semanticCommitType: "chore",
+  semanticCommitScope: "deps",
+  labels: ["renovate", "dependencies"],
+  rebaseWhen: "behind-base-branch",
+  configMigration: true,
+
+  // Every image in this repo is pinned with tag AND @sha256 digest — keep that.
+  pinDigests: true,
+  separateMinorPatch: false,
+
+  kubernetes: {
+    managerFilePatterns: [
+      "/(^|/)[^/]+\\.ya?ml$/",
+    ],
+  },
+
+  customManagers: [
+    {
+      customType: "regex",
+      managerFilePatterns: ["/argocd/kustomization\\.ya?ml$/"],
+      matchStrings: [
+        "raw\\.githubusercontent\\.com/(?<depName>argoproj/argo-cd)/(?<currentValue>v[0-9][^/]*)/manifests/install\\.yaml",
+      ],
+      datasourceTemplate: "github-releases",
+      versioningTemplate: "semver",
+    },
+    {
+      customType: "regex",
+      managerFilePatterns: ["/argocd/repo-server-patch\\.ya?ml$/"],
+      matchStrings: [
+        "image:\\s*(?<depName>quay\\.io/argoproj/argocd):(?<currentValue>v[0-9][^\\s@]*)",
+      ],
+      datasourceTemplate: "docker",
+      versioningTemplate: "semver",
+    },
+  ],
+
+  packageRules: [
+    {
+      // Digest-only refreshes on :latest pins are safe to auto-merge.
+      matchUpdateTypes: ["digest", "pinDigest"],
+      automerge: true,
+      automergeType: "branch",
+      platformAutomerge: true,
+    },
+    {
+      matchUpdateTypes: ["minor", "patch"],
+      groupName: "{{depName}} minor+patch",
+    },
+
+    {
+      matchPackageNames: [
+        "argoproj/argo-cd",
+        "quay.io/argoproj/argocd",
+      ],
+      groupName: "argo-cd",
+      commitMessageTopic: "Argo CD",
+      separateMajorMinor: true,
+    },
+
+    {
+      matchPackageNames: [
+        "ghcr.io/goauthentik/server",
+        "ghcr.io/goauthentik/rac",
+      ],
+      groupName: "authentik",
+      commitMessageTopic: "Authentik",
+    },
+
+    {
+      matchPackageNames: [
+        "matrixdotorg/synapse",
+        "vectorim/element-web",
+        "awesometechnologies/synapse-admin",
+        "livekit/livekit-server",
+        "ghcr.io/element-hq/lk-jwt-service",
+        "coturn/coturn",
+      ],
+      groupName: "matrix",
+      commitMessageTopic: "Matrix stack",
+    },
+
+    {
+      matchPackageNames: [
+        "ghcr.io/zimpatrick/cobalt",
+        "haproxy",
+        "tailscale/tailscale",
+      ],
+      matchFileNames: ["cobalt/**"],
+      groupName: "cobalt",
+      commitMessageTopic: "Cobalt",
+    },
+
+    {
+      matchPackageNames: ["infisical/infisical"],
+      groupName: "infisical",
+      commitMessageTopic: "Infisical",
+    },
+
+    {
+      matchPackageNames: [
+        "velero",
+        "velero/velero-plugin-for-aws",
+      ],
+      matchManagers: ["kustomize", "kubernetes"],
+      groupName: "velero",
+      commitMessageTopic: "Velero",
+    },
+
+    {
+      // Apps run different majors (14/16/17) — keep majors visible.
+      matchPackageNames: ["postgres"],
+      groupName: "postgres",
+      commitMessageTopic: "Postgres",
+      separateMajorMinor: true,
+    },
+
+    {
+      matchPackageNames: ["redis"],
+      groupName: "redis",
+      commitMessageTopic: "Redis",
+    },
+
+    {
+      // 4.x is a different beast from 3.x — keep majors visible.
+      matchPackageNames: ["couchdb"],
+      groupName: "couchdb",
+      separateMajorMinor: true,
+    },
+
+    {
+      // Only path in/out of the cluster — surface its PRs alone.
+      matchPackageNames: ["cloudflare/cloudflared"],
+      commitMessageTopic: "cloudflared",
+      groupName: null,
+    },
+
+    {
+      matchPackageNames: [
+        "netdata/netdata",
+        "henrygd/beszel-agent",
+      ],
+      groupName: "observability",
+      schedule: ["after 2am and before 7am on monday"],
+      commitMessageTopic: "Observability agents",
+    },
+
+    {
+      matchPackageNames: [
+        "ghcr.io/diced/zipline",
+        "ghcr.io/fccview/degoog",
+        "ghcr.io/lukegus/termix",
+        "ghcr.io/mealie-recipes/mealie",
+        "ghcr.io/pelican-dev/panel",
+        "ghcr.io/flaresolverr/flaresolverr",
+        "ghcr.io/twin/gatus",
+        "syncthing/syncthing",
+        "qmcgaw/gluetun",
+      ],
+      groupName: "selfhosted apps",
+      schedule: ["after 2am and before 7am on monday"],
+      commitMessageTopic: "Selfhosted apps",
+    },
+
+    {
+      matchPackageNames: ["/^ghcr\\.io/deadfrostt//"],
+      groupName: "own images",
+      commitMessageTopic: "Own images",
+    },
+
+    {
+      matchPackageNames: ["busybox"],
+      automerge: true,
+      automergeType: "branch",
+      platformAutomerge: true,
+      groupName: "busybox",
+    },
+
+    {
+      // Keep :latest as :latest — only the digest moves.
+      matchCurrentValue: "latest",
+      matchUpdateTypes: ["major", "minor", "patch"],
+      enabled: false,
+    },
+  ],
+
+  vulnerabilityAlerts: {
+    enabled: true,
+    labels: ["security"],
+    schedule: ["at any time"],
+    prCreation: "immediate",
+  },
+  osvVulnerabilityAlerts: true,
+
+  hostRules: [
+    {
+      matchHost: "registry-1.docker.io",
+      concurrentRequestLimit: 4,
+    },
+  ],
+}

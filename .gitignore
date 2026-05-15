@@ -40,3 +40,4 @@ auth.json
 charts/
 dist/
 build/
+.claude/
