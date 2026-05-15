@@ -5,6 +5,11 @@ metadata:
   namespace: syncthing
 spec:
   replicas: 1
+  # hostPort 22000/21027 can't be held by two pods at once, so a default
+  # RollingUpdate deadlocks: new pod can't schedule until old releases the
+  # ports, old won't be terminated until new is Ready.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: syncthing
