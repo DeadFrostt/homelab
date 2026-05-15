@@ -239,6 +239,7 @@
         "ghcr.io/twin/gatus",
         "syncthing/syncthing",
         "qmcgaw/gluetun",
+        "vaultwarden/server",
       ],
       groupName: "selfhosted apps",
       schedule: ["after 2am and before 7am on monday"],

@@ -23,7 +23,10 @@ spec:
             - name: TZ
               value: "America/Chicago"
             - name: COUCHDB_USER
-              value: "obsidian_user"
+              valueFrom:
+                secretKeyRef:
+                  name: couch-db-env
+                  key: COUCHDB_USER
             - name: COUCHDB_PASSWORD
               valueFrom:
                 secretKeyRef:
