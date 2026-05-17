@@ -48,7 +48,7 @@ data:
 
       - name: Mealie
         group: Apps
-        url: "http://10.0.0.48:9925"
+        url: "http://10.0.0.48:30925"
         interval: 60s
         ui:
           hide-url: true
@@ -84,7 +84,7 @@ data:
 
       - name: Cobalt
         group: Apps
-        url: "http://10.0.0.48:9009"
+        url: "http://10.0.0.48:30009"
         interval: 60s
         ui:
           hide-url: true
@@ -111,7 +111,7 @@ data:
       # --- Communication ---
       - name: Synapse (Matrix)
         group: Communication
-        url: "http://10.0.0.48:8999/_matrix/client/versions"
+        url: "http://10.0.0.48:30899/_matrix/client/versions"
         interval: 60s
         ui:
           hide-url: true
@@ -123,7 +123,7 @@ data:
 
       - name: Element Web
         group: Communication
-        url: "http://10.0.0.48:8030"
+        url: "http://10.0.0.48:30030"
         interval: 60s
         ui:
           hide-url: true
@@ -147,7 +147,7 @@ data:
 
       - name: Matrix Federation
         group: Communication
-        url: "http://10.0.0.48:8999/_matrix/federation/v1/version"
+        url: "http://10.0.0.48:30899/_matrix/federation/v1/version"
         interval: 60s
         ui:
           hide-url: true

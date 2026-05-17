@@ -4,6 +4,7 @@ namespace: velero
 resources:
   - namespace.yaml
   - infisical-secret.yaml
+  - discord-notifier.yaml
 helmCharts:
   - name: velero
     repo: https://vmware-tanzu.github.io/helm-charts

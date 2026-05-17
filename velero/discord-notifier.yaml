@@ -1,0 +1,136 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: velero-discord-notifier
+  namespace: velero
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: velero-discord-notifier
+  namespace: velero
+rules:
+  - apiGroups: ["velero.io"]
+    resources: ["backups"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: velero-discord-notifier
+  namespace: velero
+subjects:
+  - kind: ServiceAccount
+    name: velero-discord-notifier
+    namespace: velero
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: velero-discord-notifier
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: velero-discord-notifier
+  namespace: velero
+spec:
+  schedule: "15 9 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      template:
+        spec:
+          serviceAccountName: velero-discord-notifier
+          automountServiceAccountToken: true
+          restartPolicy: OnFailure
+          containers:
+            - name: notifier
+              image: python:3.12-alpine@sha256:9ba6d8cbebf0fb6546ae71f2a1c14f6ffd2fdab83af7fa5669734ef30ad48844
+              env:
+                - name: DISCORD_WEBHOOK_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: velero-discord-webhook
+                      key: DISCORD_WEBHOOK_URL
+                - name: BACKUP_NAMESPACE
+                  value: velero
+              command: ["python", "-c"]
+              args:
+                - |
+                  import json
+                  import os
+                  import ssl
+                  import urllib.request
+                  from datetime import datetime, timezone
+
+                  namespace = os.environ.get("BACKUP_NAMESPACE", "velero")
+                  webhook = os.environ["DISCORD_WEBHOOK_URL"]
+                  token = open("/var/run/secrets/kubernetes.io/serviceaccount/token", "r", encoding="utf-8").read().strip()
+                  ca = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+                  api = f"https://kubernetes.default.svc/apis/velero.io/v1/namespaces/{namespace}/backups"
+                  ctx = ssl.create_default_context(cafile=ca)
+                  req = urllib.request.Request(api, headers={"Authorization": f"Bearer {token}"})
+                  with urllib.request.urlopen(req, context=ctx, timeout=30) as resp:
+                      backups = json.load(resp).get("items", [])
+
+                  if not backups:
+                      raise SystemExit("No Velero backups found")
+
+                  backups.sort(key=lambda b: b.get("status", {}).get("startTimestamp") or b.get("metadata", {}).get("creationTimestamp", ""), reverse=True)
+                  backup = backups[0]
+                  meta = backup.get("metadata", {})
+                  spec = backup.get("spec", {})
+                  status = backup.get("status", {})
+                  phase = status.get("phase", "Unknown")
+                  started = status.get("startTimestamp", "unknown")
+                  completed = status.get("completionTimestamp", "not completed")
+                  expires = status.get("expiration", "unknown")
+                  progress = status.get("progress", {})
+                  backed = progress.get("itemsBackedUp", 0)
+                  total = progress.get("totalItems", 0)
+                  warnings = status.get("warnings", 0)
+                  errors = status.get("errors", 0)
+                  ttl = spec.get("ttl", "default")
+                  location = spec.get("storageLocation", "default")
+                  included = ", ".join(spec.get("includedNamespaces", [])) or "default"
+                  excluded = ", ".join(spec.get("excludedNamespaces", [])) or "none"
+                  fs_backup = str(spec.get("defaultVolumesToFsBackup", False)).lower()
+                  snapshot = str(spec.get("snapshotVolumes", False)).lower()
+
+                  color = 0x2ecc71 if phase == "Completed" and errors == 0 else 0xf1c40f if phase == "PartiallyFailed" or warnings else 0xe74c3c
+                  title = f"Velero backup {phase}: {meta.get('name', 'unknown')}"
+                  fields = [
+                      {"name": "Items", "value": f"{backed}/{total}", "inline": True},
+                      {"name": "Warnings / Errors", "value": f"{warnings} / {errors}", "inline": True},
+                      {"name": "Storage", "value": location, "inline": True},
+                      {"name": "Started", "value": started, "inline": False},
+                      {"name": "Completed", "value": completed, "inline": False},
+                      {"name": "Expires", "value": expires, "inline": False},
+                      {"name": "TTL", "value": ttl, "inline": True},
+                      {"name": "Filesystem Backup", "value": fs_backup, "inline": True},
+                      {"name": "Snapshots", "value": snapshot, "inline": True},
+                      {"name": "Included Namespaces", "value": included[:1024], "inline": False},
+                      {"name": "Excluded Namespaces", "value": excluded[:1024], "inline": False},
+                  ]
+                  payload = {
+                      "embeds": [{
+                          "title": title,
+                          "color": color,
+                          "fields": fields,
+                          "timestamp": datetime.now(timezone.utc).isoformat(),
+                          "footer": {"text": "k3s Velero backups"},
+                      }]
+                  }
+                  data = json.dumps(payload).encode("utf-8")
+                  req = urllib.request.Request(
+                      webhook,
+                      data=data,
+                      headers={"Content-Type": "application/json", "User-Agent": "k3s-velero-notifier/1.0"},
+                      method="POST",
+                  )
+                  with urllib.request.urlopen(req, timeout=30) as resp:
+                      if resp.status >= 300:
+                          raise SystemExit(f"Discord webhook failed: HTTP {resp.status}")
