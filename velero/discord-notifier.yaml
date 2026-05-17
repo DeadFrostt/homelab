@@ -48,7 +48,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: notifier
-              image: python:3.12-alpine@sha256:9ba6d8cbebf0fb6546ae71f2a1c14f6ffd2fdab83af7fa5669734ef30ad48844
+              image: python:3.14-alpine@sha256:5a824eb82cc75361f98611f3cfc5091ea33f10a6ccea4d4ebdabbc523b9a1614
               env:
                 - name: DISCORD_WEBHOOK_URL
                   valueFrom:
