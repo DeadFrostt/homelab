@@ -36,7 +36,7 @@ data:
       # --- Apps ---
       - name: CouchDB
         group: Apps
-        url: "http://10.0.0.48:5984"
+        url: "http://obsidian-livesync.couch-db.svc.cluster.local:5984"
         interval: 60s
         ui:
           hide-url: true
@@ -48,7 +48,7 @@ data:
 
       - name: Mealie
         group: Apps
-        url: "http://10.0.0.48:30925"
+        url: "http://mealie.mealie.svc.cluster.local:9000"
         interval: 60s
         ui:
           hide-url: true
@@ -70,21 +70,9 @@ data:
         alerts:
           - type: webhook
 
-      - name: SearXNG
-        group: Apps
-        url: "http://10.0.0.48:8888"
-        interval: 60s
-        ui:
-          hide-url: true
-          hide-hostname: true
-        conditions:
-          - "[STATUS] == 200"
-        alerts:
-          - type: webhook
-
       - name: Cobalt
         group: Apps
-        url: "http://10.0.0.48:30009"
+        url: "http://cobalt-proxy.cobalt.svc.cluster.local:9009"
         interval: 60s
         ui:
           hide-url: true
@@ -111,7 +99,7 @@ data:
       # --- Communication ---
       - name: Synapse (Matrix)
         group: Communication
-        url: "http://10.0.0.48:30899/_matrix/client/versions"
+        url: "http://synapse.matrix.svc.cluster.local:8008/_matrix/client/versions"
         interval: 60s
         ui:
           hide-url: true
@@ -123,7 +111,7 @@ data:
 
       - name: Element Web
         group: Communication
-        url: "http://10.0.0.48:30030"
+        url: "http://element.matrix.svc.cluster.local:80"
         interval: 60s
         ui:
           hide-url: true
@@ -147,7 +135,7 @@ data:
 
       - name: Matrix Federation
         group: Communication
-        url: "http://10.0.0.48:30899/_matrix/federation/v1/version"
+        url: "http://synapse.matrix.svc.cluster.local:8008/_matrix/federation/v1/version"
         interval: 60s
         ui:
           hide-url: true
