@@ -13,6 +13,8 @@ spec:
       labels:
         app: element
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: yeager
       containers:
         - name: element
           image: vectorim/element-web:latest@sha256:f4a81a24d49a9c5b97e02e77a3013ec799873e500e69041078a28be98e4f1280
