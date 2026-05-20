@@ -9,7 +9,6 @@ resources:
   - cnpg-app-secret.yaml
   - cnpg-cluster.yaml
   - pvc.yaml
-  - postgres.yaml
   - synapse.yaml
   - element-configmap.yaml
   - element.yaml

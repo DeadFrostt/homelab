@@ -9,5 +9,4 @@ resources:
   - cnpg-app-secret.yaml
   - cnpg-cluster.yaml
   - pvc.yaml
-  - postgres.yaml
   - deployment.yaml

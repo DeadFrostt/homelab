@@ -4,6 +4,9 @@ metadata:
   name: authentik-pg
   namespace: authentik
 spec:
+  inheritedMetadata:
+    annotations:
+      backup.velero.io/backup-volumes-excludes: pgdata
   instances: 1
   imageName: ghcr.io/cloudnative-pg/postgresql:17.2
 
