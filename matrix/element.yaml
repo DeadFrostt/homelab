@@ -13,8 +13,32 @@ spec:
       labels:
         app: element
     spec:
-      nodeSelector:
-        kubernetes.io/hostname: yeager
+      initContainers:
+        - name: render-config
+          image: alpine:3.20
+          command:
+            - sh
+            - -c
+            - |
+              apk add --no-cache gettext >/dev/null
+              envsubst < /tmp/tmpl/element-config.json.tmpl > /etc/element/config.json
+          env:
+            - name: MATRIX_BASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: matrix-env
+                  key: MATRIX_BASE_URL
+            - name: MATRIX_SERVER_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: matrix-env
+                  key: MATRIX_SERVER_NAME
+          volumeMounts:
+            - name: config-tmpl
+              mountPath: /tmp/tmpl
+              readOnly: true
+            - name: config-rendered
+              mountPath: /etc/element
       containers:
         - name: element
           image: vectorim/element-web:latest@sha256:f4a81a24d49a9c5b97e02e77a3013ec799873e500e69041078a28be98e4f1280
@@ -22,9 +46,9 @@ spec:
             - containerPort: 80
               name: http
           volumeMounts:
-            - name: config
+            - name: config-rendered
               mountPath: /app/config.json
-              subPath: element-config.json
+              subPath: config.json
               readOnly: true
           resources:
             limits:
@@ -34,10 +58,11 @@ spec:
               memory: "32Mi"
               cpu: "50m"
       volumes:
-        - name: config
-          hostPath:
-            path: /home/ubuntu/docker-compose/matrix
-            type: Directory
+        - name: config-tmpl
+          configMap:
+            name: element-config
+        - name: config-rendered
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service

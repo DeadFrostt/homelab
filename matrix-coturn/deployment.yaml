@@ -19,14 +19,54 @@ spec:
       dnsPolicy: ClusterFirstWithHostNet
       nodeSelector:
         kubernetes.io/hostname: yeager
+      initContainers:
+        - name: render-config
+          image: alpine:3.20
+          command:
+            - sh
+            - -c
+            - |
+              apk add --no-cache gettext >/dev/null
+              envsubst < /tmp/tmpl/turnserver.conf.tmpl > /etc/coturn/turnserver.conf
+          env:
+            - name: COTURN_AUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: matrix-coturn-env
+                  key: COTURN_AUTH_SECRET
+            - name: TURN_REALM
+              valueFrom:
+                secretKeyRef:
+                  name: matrix-coturn-env
+                  key: TURN_REALM
+            - name: TURN_SERVER_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: matrix-coturn-env
+                  key: TURN_SERVER_NAME
+            - name: TURN_EXTERNAL_IP
+              valueFrom:
+                secretKeyRef:
+                  name: matrix-coturn-env
+                  key: TURN_EXTERNAL_IP
+            - name: TURN_RELAY_IP
+              valueFrom:
+                secretKeyRef:
+                  name: matrix-coturn-env
+                  key: TURN_RELAY_IP
+          volumeMounts:
+            - name: config-tmpl
+              mountPath: /tmp/tmpl
+              readOnly: true
+            - name: config-rendered
+              mountPath: /etc/coturn
       containers:
         - name: coturn
           image: coturn/coturn:latest@sha256:f4c2af06c3c535c4f49d64e14d484104e7e4fcc98c4cb83d6e1544f64d1e6158
-          args: ["turnserver", "-c", "/etc/turnserver.conf"]
+          args: ["turnserver", "-c", "/etc/coturn/turnserver.conf"]
           volumeMounts:
-            - name: config
-              mountPath: /etc/turnserver.conf
-              subPath: turnserver.conf
+            - name: config-rendered
+              mountPath: /etc/coturn
               readOnly: true
             - name: letsencrypt
               mountPath: /etc/letsencrypt
@@ -39,10 +79,11 @@ spec:
               memory: "64Mi"
               cpu: "50m"
       volumes:
-        - name: config
-          hostPath:
-            path: /home/ubuntu/docker-compose/matrix/coturn
-            type: Directory
+        - name: config-tmpl
+          configMap:
+            name: coturn-config
+        - name: config-rendered
+          emptyDir: {}
         - name: letsencrypt
           hostPath:
             path: /etc/letsencrypt

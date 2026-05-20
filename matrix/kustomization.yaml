@@ -8,5 +8,6 @@ resources:
   - pvc.yaml
   - postgres.yaml
   - synapse.yaml
+  - element-configmap.yaml
   - element.yaml
   - synapse-admin.yaml

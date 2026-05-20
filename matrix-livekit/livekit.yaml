@@ -19,14 +19,41 @@ spec:
       dnsPolicy: ClusterFirstWithHostNet
       nodeSelector:
         kubernetes.io/hostname: yeager
+      initContainers:
+        - name: render-config
+          image: alpine:3.20
+          command:
+            - sh
+            - -c
+            - |
+              apk add --no-cache gettext >/dev/null
+              envsubst < /tmp/tmpl/config.yaml.tmpl > /etc/livekit/config.yaml
+              echo "rendered config:"
+              sed 's/\(["'\'']\)[^"'\'']*\(["'\'']\)/\1***\2/g' /etc/livekit/config.yaml
+          env:
+            - name: LIVEKIT_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: matrix-livekit-env
+                  key: LIVEKIT_KEY
+            - name: LIVEKIT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: matrix-livekit-env
+                  key: LIVEKIT_SECRET
+          volumeMounts:
+            - name: config-tmpl
+              mountPath: /tmp/tmpl
+              readOnly: true
+            - name: config-rendered
+              mountPath: /etc/livekit
       containers:
         - name: livekit
           image: livekit/livekit-server:latest@sha256:100b9a870616d02f5e3795b34e0b593b5054a26f8131a94fd3fa322ed3154b16
-          args: ["--config", "/etc/livekit.yaml"]
+          args: ["--config", "/etc/livekit/config.yaml"]
           volumeMounts:
-            - name: config
-              mountPath: /etc/livekit.yaml
-              subPath: config.yaml
+            - name: config-rendered
+              mountPath: /etc/livekit
               readOnly: true
           resources:
             limits:
@@ -36,7 +63,8 @@ spec:
               memory: "128Mi"
               cpu: "100m"
       volumes:
-        - name: config
-          hostPath:
-            path: /home/ubuntu/docker-compose/matrix/livekit
-            type: Directory
+        - name: config-tmpl
+          configMap:
+            name: livekit-config
+        - name: config-rendered
+          emptyDir: {}
