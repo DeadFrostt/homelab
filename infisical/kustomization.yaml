@@ -4,6 +4,8 @@ namespace: infisical
 resources:
   - namespace.yaml
   - networkpolicy.yaml
+  - cnpg-networkpolicy.yaml
+  - cnpg-cluster.yaml
   - postgres.yaml
   - redis.yaml
   - backend.yaml

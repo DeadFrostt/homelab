@@ -21,7 +21,7 @@ spec:
           args: ["worker"]
           env:
             - name: AUTHENTIK_POSTGRESQL__HOST
-              value: "postgresql"
+              value: "authentik-pg-rw"
             - name: AUTHENTIK_SECRET_KEY
               valueFrom:
                 secretKeyRef:
