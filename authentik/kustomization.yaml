@@ -4,7 +4,10 @@ namespace: authentik
 resources:
   - namespace.yaml
   - networkpolicy.yaml
+  - cnpg-networkpolicy.yaml
   - infisical-secret.yaml
+  - cnpg-app-secret.yaml
+  - cnpg-cluster.yaml
   - pvc.yaml
   - postgres.yaml
   - server.yaml
