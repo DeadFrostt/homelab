@@ -1,0 +1,44 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-cnpg-ingress
+  namespace: zipline
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/cluster: zipline-pg
+  policyTypes:
+    - Ingress
+  ingress:
+    # zipline app
+    - from:
+        - podSelector:
+            matchLabels:
+              app: zipline
+      ports:
+        - protocol: TCP
+          port: 5432
+    # cnpg operator (managing the cluster)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cnpg-system
+    # peer instances (for replication when we scale to 2)
+    - from:
+        - podSelector:
+            matchLabels:
+              cnpg.io/cluster: zipline-pg
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-cnpg-egress
+  namespace: zipline
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/cluster: zipline-pg
+  policyTypes:
+    - Egress
+  egress:
+    - {}
