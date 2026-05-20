@@ -26,7 +26,7 @@ spec:
                   name: zipline-env
                   key: POSTGRESQL_PASSWORD
             - name: DATABASE_URL
-              value: "postgres://zipline:$(POSTGRESQL_PASSWORD)@postgresql:5432/zipline"
+              value: "postgres://zipline:$(POSTGRESQL_PASSWORD)@zipline-pg-rw:5432/zipline"
             - name: CORE_SECRET
               valueFrom:
                 secretKeyRef:

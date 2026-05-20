@@ -1,0 +1,41 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-cnpg-ingress
+  namespace: matrix
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/cluster: matrix-pg
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: synapse
+      ports:
+        - protocol: TCP
+          port: 5432
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cnpg-system
+    - from:
+        - podSelector:
+            matchLabels:
+              cnpg.io/cluster: matrix-pg
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-cnpg-egress
+  namespace: matrix
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/cluster: matrix-pg
+  policyTypes:
+    - Egress
+  egress:
+    - {}

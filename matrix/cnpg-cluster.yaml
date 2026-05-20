@@ -1,0 +1,40 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: matrix-pg
+  namespace: matrix
+spec:
+  instances: 1
+  imageName: ghcr.io/cloudnative-pg/postgresql:16.6
+
+  primaryUpdateStrategy: unsupervised
+
+  bootstrap:
+    initdb:
+      database: synapse
+      owner: synapse
+      secret:
+        name: matrix-pg-app
+      encoding: UTF8
+      localeCollate: C
+      localeCType: C
+
+  storage:
+    size: 20Gi
+    storageClass: local-path
+
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 100m
+    limits:
+      memory: 1Gi
+      cpu: 1000m
+
+  monitoring:
+    enablePodMonitor: false
+
+  postgresql:
+    parameters:
+      max_connections: "200"
+      shared_buffers: "256MB"
