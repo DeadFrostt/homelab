@@ -13,6 +13,8 @@ spec:
     metadata:
       labels:
         app: postgresql
+      annotations:
+        backup.velero.io/backup-volumes-excludes: pgdata
     spec:
       containers:
         - name: postgresql

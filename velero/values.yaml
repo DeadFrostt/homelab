@@ -58,17 +58,15 @@ schedules:
       ttl: "336h"
       storageLocation: default
       includedNamespaces:
-        - "*"
-      excludedNamespaces:
-        - argocd
-        - cert-manager
-        - default
-        - external-secrets
-        - infisical-operator
-        - infisical-operator-system
-        - kube-node-lease
-        - kube-public
-        - kube-system
-        - velero
+        - authentik
+        - couch-db
+        - degoog
+        - infisical
+        - matrix
+        - mealie
+        - pelican
+        - termix
+        - vaultwarden
+        - zipline
       defaultVolumesToFsBackup: true
       snapshotVolumes: false

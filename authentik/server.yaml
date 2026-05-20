@@ -14,6 +14,8 @@ spec:
     metadata:
       labels:
         app: authentik-server
+      annotations:
+        backup.velero.io/backup-volumes-excludes: templates
     spec:
       containers:
         - name: server

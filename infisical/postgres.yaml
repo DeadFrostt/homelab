@@ -26,6 +26,8 @@ spec:
     metadata:
       labels:
         app: postgres
+      annotations:
+        backup.velero.io/backup-volumes-excludes: data
     spec:
       containers:
         - name: postgres
