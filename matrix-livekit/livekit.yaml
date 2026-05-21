@@ -49,7 +49,7 @@ spec:
               mountPath: /etc/livekit
       containers:
         - name: livekit
-          image: livekit/livekit-server:latest@sha256:100b9a870616d02f5e3795b34e0b593b5054a26f8131a94fd3fa322ed3154b16
+          image: livekit/livekit-server:latest@sha256:b617bb3363f13e880a82164692d842681276bc6eed7da46092f9ddb22017b927
           args: ["--config", "/etc/livekit/config.yaml"]
           volumeMounts:
             - name: config-rendered
