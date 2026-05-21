@@ -1,14 +1,58 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: allow-all
+  name: default-deny-all
   namespace: syncthing
 spec:
   podSelector: {}
   policyTypes:
     - Ingress
     - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: syncthing
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-syncthing
+  namespace: syncthing
+spec:
+  podSelector:
+    matchLabels:
+      app: syncthing
+  policyTypes:
+    - Ingress
+    - Egress
   ingress:
-    - {}
+    - ports:
+        - protocol: TCP
+          port: 8384
+        - protocol: TCP
+          port: 22000
+        - protocol: UDP
+          port: 22000
+        - protocol: UDP
+          port: 21027
   egress:
     - {}

@@ -38,3 +38,20 @@ spec:
     parameters:
       max_connections: "100"
       shared_buffers: "128MB"
+
+  backup:
+    retentionPolicy: "14d"
+    barmanObjectStore:
+      destinationPath: "s3://k3s-backups-yeager/cnpg/zipline"
+      endpointURL: "https://s3.us-east-005.backblazeb2.com"
+      s3Credentials:
+        accessKeyId:
+          name: cnpg-b2-credentials
+          key: AWS_ACCESS_KEY_ID
+        secretAccessKey:
+          name: cnpg-b2-credentials
+          key: AWS_SECRET_ACCESS_KEY
+      wal:
+        compression: gzip
+      data:
+        compression: gzip

@@ -6,5 +6,6 @@ resources:
   - networkpolicy.yaml
   - cnpg-networkpolicy.yaml
   - cnpg-cluster.yaml
+  - cnpg-scheduledbackup.yaml
   - redis.yaml
   - backend.yaml

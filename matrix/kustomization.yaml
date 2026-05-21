@@ -7,7 +7,9 @@ resources:
   - cnpg-networkpolicy.yaml
   - infisical-secret.yaml
   - cnpg-app-secret.yaml
+  - cnpg-backup-secret.yaml
   - cnpg-cluster.yaml
+  - cnpg-scheduledbackup.yaml
   - pvc.yaml
   - synapse.yaml
   - element-configmap.yaml

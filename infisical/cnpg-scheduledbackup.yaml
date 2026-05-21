@@ -1,0 +1,12 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: infisical-pg-weekly
+  namespace: infisical
+spec:
+  schedule: "0 0 3 * * 0"
+  immediate: true
+  backupOwnerReference: self
+  cluster:
+    name: infisical-pg
+  method: barmanObjectStore

@@ -1,0 +1,12 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: zipline-pg-weekly
+  namespace: zipline
+spec:
+  schedule: "0 0 3 * * 0"
+  immediate: true
+  backupOwnerReference: self
+  cluster:
+    name: zipline-pg
+  method: barmanObjectStore
