@@ -9,3 +9,4 @@ resources:
   - cnpg-scheduledbackup.yaml
   - redis.yaml
   - backend.yaml
+  - limitrange.yaml

@@ -62,7 +62,7 @@ spec:
               cpu: "500m"
             requests:
               memory: "64Mi"
-              cpu: "100m"
+              cpu: "50m"
         - name: cobalt-api
           image: ghcr.io/zimpatrick/cobalt:staging@sha256:eaa35c2735ee83f3ee05ccf294cedf1e93c1264bc49f24e13e8df5fb564fd1a1
           env:
@@ -100,10 +100,10 @@ spec:
           resources:
             limits:
               memory: "512Mi"
-              cpu: "1000m"
+              cpu: "750m"
             requests:
               memory: "256Mi"
-              cpu: "250m"
+              cpu: "50m"
       volumes:
         - name: tailscale-state
           persistentVolumeClaim:

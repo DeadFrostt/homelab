@@ -77,7 +77,7 @@ spec:
               cpu: "500m"
             requests:
               memory: "64Mi"
-              cpu: "50m"
+              cpu: "25m"
       volumes:
         - name: config-tmpl
           configMap:

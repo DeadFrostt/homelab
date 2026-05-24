@@ -57,10 +57,10 @@ spec:
           resources:
             limits:
               memory: "2Gi"
-              cpu: "1500m"
+              cpu: "750m"
             requests:
               memory: "256Mi"
-              cpu: "100m"
+              cpu: "50m"
       volumes:
         - name: media
           persistentVolumeClaim:

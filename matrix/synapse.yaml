@@ -37,10 +37,10 @@ spec:
           resources:
             limits:
               memory: "2Gi"
-              cpu: "1500m"
+              cpu: "750m"
             requests:
               memory: "512Mi"
-              cpu: "200m"
+              cpu: "100m"
       volumes:
         - name: data
           persistentVolumeClaim:

@@ -12,3 +12,4 @@ resources:
   - cobalt-primary.yaml
   - cobalt-backup.yaml
   - cobalt-proxy.yaml
+  - limitrange.yaml
