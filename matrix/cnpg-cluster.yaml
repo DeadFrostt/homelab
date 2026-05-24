@@ -57,6 +57,7 @@ spec:
   backup:
     retentionPolicy: "14d"
     barmanObjectStore:
+      serverName: matrix-pg-v2
       destinationPath: "s3://k3s-backups-yeager/cnpg/matrix"
       endpointURL: "https://s3.us-east-005.backblazeb2.com"
       s3Credentials:
