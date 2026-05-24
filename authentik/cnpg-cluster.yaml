@@ -13,11 +13,26 @@ spec:
   primaryUpdateStrategy: unsupervised
 
   bootstrap:
-    initdb:
-      database: authentik
-      owner: authentik
-      secret:
-        name: authentik-pg-app
+    recovery:
+      source: authentik-pg-backup
+
+  externalClusters:
+  - name: authentik-pg-backup
+    barmanObjectStore:
+      destinationPath: "s3://k3s-backups-yeager/cnpg/authentik"
+      endpointURL: "https://s3.us-east-005.backblazeb2.com"
+      s3Credentials:
+        accessKeyId:
+          name: cnpg-b2-credentials
+          key: AWS_ACCESS_KEY_ID
+        secretAccessKey:
+          name: cnpg-b2-credentials
+          key: AWS_SECRET_ACCESS_KEY
+      serverName: authentik-pg
+
+  affinity:
+    nodeSelector:
+      kubernetes.io/hostname: yeager
 
   storage:
     size: 10Gi

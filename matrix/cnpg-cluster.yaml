@@ -13,14 +13,26 @@ spec:
   primaryUpdateStrategy: unsupervised
 
   bootstrap:
-    initdb:
-      database: synapse
-      owner: synapse
-      secret:
-        name: matrix-pg-app
-      encoding: UTF8
-      localeCollate: C
-      localeCType: C
+    recovery:
+      source: matrix-pg-backup
+
+  externalClusters:
+  - name: matrix-pg-backup
+    barmanObjectStore:
+      destinationPath: "s3://k3s-backups-yeager/cnpg/matrix"
+      endpointURL: "https://s3.us-east-005.backblazeb2.com"
+      s3Credentials:
+        accessKeyId:
+          name: cnpg-b2-credentials
+          key: AWS_ACCESS_KEY_ID
+        secretAccessKey:
+          name: cnpg-b2-credentials
+          key: AWS_SECRET_ACCESS_KEY
+      serverName: matrix-pg
+
+  affinity:
+    nodeSelector:
+      kubernetes.io/hostname: yeager
 
   storage:
     size: 20Gi

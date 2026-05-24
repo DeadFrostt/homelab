@@ -19,6 +19,10 @@ spec:
       secret:
         name: infisical-pg-app
 
+  affinity:
+    nodeSelector:
+      kubernetes.io/hostname: yeager
+
   storage:
     size: 5Gi
     storageClass: local-path
