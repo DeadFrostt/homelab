@@ -26,8 +26,9 @@ spec:
             - sh
             - -c
             - |
-              apk add --no-cache gettext >/dev/null
-              envsubst < /tmp/tmpl/config.yaml.tmpl > /etc/livekit/config.yaml
+              sed -e "s|\${LIVEKIT_KEY}|${LIVEKIT_KEY}|g" \
+                  -e "s|\${LIVEKIT_SECRET}|${LIVEKIT_SECRET}|g" \
+                  /tmp/tmpl/config.yaml.tmpl > /etc/livekit/config.yaml
               echo "rendered config:"
               sed 's/\(["'\'']\)[^"'\'']*\(["'\'']\)/\1***\2/g' /etc/livekit/config.yaml
           env:
