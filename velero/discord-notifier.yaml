@@ -40,7 +40,7 @@ spec:
   failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
-      backoffLimit: 0
+      backoffLimit: 3
       template:
         spec:
           serviceAccountName: velero-discord-notifier
@@ -63,8 +63,21 @@ spec:
                   import json
                   import os
                   import ssl
+                  import time
+                  import urllib.error
                   import urllib.request
                   from datetime import datetime, timezone
+
+                  def urlopen_retry(req, attempts=6, **kwargs):
+                      # External DNS (discord.com) intermittently throws EAI_AGAIN on a
+                      # cold pod, so retry transient network/DNS errors with backoff.
+                      for attempt in range(attempts):
+                          try:
+                              return urllib.request.urlopen(req, **kwargs)
+                          except (urllib.error.URLError, OSError):
+                              if attempt == attempts - 1:
+                                  raise
+                              time.sleep(2 ** attempt)
 
                   namespace = os.environ.get("BACKUP_NAMESPACE", "velero")
                   webhook = os.environ["DISCORD_WEBHOOK_URL"]
@@ -73,8 +86,8 @@ spec:
                   api = f"https://kubernetes.default.svc/apis/velero.io/v1/namespaces/{namespace}/backups"
                   ctx = ssl.create_default_context(cafile=ca)
                   req = urllib.request.Request(api, headers={"Authorization": f"Bearer {token}"})
-                  with urllib.request.urlopen(req, context=ctx, timeout=30) as resp:
-                      backups = json.load(resp).get("items", [])
+                  resp = urlopen_retry(req, context=ctx, timeout=30)
+                  backups = json.load(resp).get("items", [])
 
                   if not backups:
                       raise SystemExit("No Velero backups found")
@@ -131,6 +144,6 @@ spec:
                       headers={"Content-Type": "application/json", "User-Agent": "k3s-velero-notifier/1.0"},
                       method="POST",
                   )
-                  with urllib.request.urlopen(req, timeout=30) as resp:
-                      if resp.status >= 300:
-                          raise SystemExit(f"Discord webhook failed: HTTP {resp.status}")
+                  resp = urlopen_retry(req, timeout=30)
+                  if resp.status >= 300:
+                      raise SystemExit(f"Discord webhook failed: HTTP {resp.status}")
