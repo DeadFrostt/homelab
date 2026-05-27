@@ -41,7 +41,7 @@ spec:
               mountPath: /etc/element
       containers:
         - name: element
-          image: vectorim/element-web:latest@sha256:f4a81a24d49a9c5b97e02e77a3013ec799873e500e69041078a28be98e4f1280
+          image: vectorim/element-web:latest@sha256:2cdd374e2cb65c1634fa92786d74eba195aa39ed782b43fba2e6b54f6d36ae7d
           ports:
             - containerPort: 80
               name: http

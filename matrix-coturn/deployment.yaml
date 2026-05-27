@@ -62,7 +62,7 @@ spec:
               mountPath: /etc/coturn
       containers:
         - name: coturn
-          image: coturn/coturn:latest@sha256:f4c2af06c3c535c4f49d64e14d484104e7e4fcc98c4cb83d6e1544f64d1e6158
+          image: coturn/coturn:latest@sha256:161cedd63c5414c2136f306098e02e9aede74606cedad8b9b8581aae1da4e732
           args: ["turnserver", "-c", "/etc/coturn/turnserver.conf"]
           volumeMounts:
             - name: config-rendered
