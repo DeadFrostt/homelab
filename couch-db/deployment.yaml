@@ -95,7 +95,7 @@ spec:
     spec:
       containers:
         - name: cloudflared
-          image: cloudflare/cloudflared:latest
+          image: cloudflare/cloudflared:latest@sha256:12ff5c6992a9863db4da270746af7c244bcaee49353039af8104268a18d6c4f0
           args:
             - tunnel
             - --no-autoupdate
