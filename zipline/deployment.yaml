@@ -20,6 +20,8 @@ spec:
             - containerPort: 3000
               name: http
           env:
+            - name: CORE_RETURN_HTTPS_URLS
+              value: "true"
             - name: POSTGRESQL_PASSWORD
               valueFrom:
                 secretKeyRef:
