@@ -28,6 +28,9 @@ spec:
               curl -fsSLO "https://dl.k8s.io/release/$(curl -fsSL https://dl.k8s.io/release/stable.txt)/bin/linux/${ARCH}/kubectl"
               install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
               rm kubectl
+              mkdir -p /root/.config/poke
+              printf '{"token":"%s"}' "$POKE_API_KEY" > /root/.config/poke/credentials.json
+              chmod 600 /root/.config/poke/credentials.json
               exec npx -y poke-gate --headless
           envFrom:
             - secretRef:
