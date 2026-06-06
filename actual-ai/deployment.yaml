@@ -15,12 +15,16 @@ spec:
       labels:
         app: actual-ai
     spec:
+      hostAliases:
+        - ip: 100.105.150.16
+          hostnames:
+            - __TAILSCALE_HOST__
       containers:
         - name: actual-ai
           image: sakowicz/actual-ai:latest@sha256:f8706c63f75456e25c97aff8d87e87168dfa2782b9cea512f77cbc7f13e41b8c
           env:
             - name: ACTUAL_SERVER_URL
-              value: "https://actual-budget.actual-budget.svc.cluster.local:5006"
+              value: "https://__TAILSCALE_HOST__:30506"
             - name: ACTUAL_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -46,8 +50,6 @@ spec:
                   key: OPENAI_API_KEY
             - name: FEATURES
               value: '["classifyOnStartup","syncAccountsBeforeClassify","freeWebSearch","suggestNewCategories"]'
-            - name: NODE_TLS_REJECT_UNAUTHORIZED
-              value: "0"
             - name: TZ
               value: "America/Anchorage"
           resources:
