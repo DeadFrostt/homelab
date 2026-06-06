@@ -15,16 +15,12 @@ spec:
       labels:
         app: actual-ai
     spec:
-      hostAliases:
-        - ip: 100.105.150.16
-          hostnames:
-            - yeager.angelfish-ruler.ts.net
       containers:
         - name: actual-ai
           image: sakowicz/actual-ai:latest@sha256:f8706c63f75456e25c97aff8d87e87168dfa2782b9cea512f77cbc7f13e41b8c
           env:
             - name: ACTUAL_SERVER_URL
-              value: "https://yeager.angelfish-ruler.ts.net:30506"
+              value: "http://actual-budget.actual-budget.svc.cluster.local:5006"
             - name: ACTUAL_PASSWORD
               valueFrom:
                 secretKeyRef:
