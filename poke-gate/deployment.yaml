@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: poke-gate
+  namespace: poke-gate
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: poke-gate
+  template:
+    metadata:
+      labels:
+        app: poke-gate
+    spec:
+      serviceAccountName: poke-gate-sa
+      containers:
+        - name: poke-gate
+          image: node:20-slim
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              apt-get update && apt-get install -y curl ca-certificates
+              # Install kubectl
+              curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+              install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+              # Install gh cli
+              curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+              chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
+              echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+              apt-get update && apt-get install gh -y
+              # Run poke-gate in headless mode
+              npx poke-gate --headless
+          env:
+            - name: BROWSER
+              value: "none"
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          volumeMounts:
+            - name: root-volume
+              mountPath: /root
+      volumes:
+        - name: root-volume
+          persistentVolumeClaim:
+            claimName: poke-gate-pvc
