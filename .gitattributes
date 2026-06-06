@@ -3,3 +3,4 @@
 # needed on a fresh clone.
 *.yaml filter=local-scrub
 *.yml  filter=local-scrub
+actual-ai/deployment.yaml -filter
