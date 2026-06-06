@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: actual-budget
+  namespace: actual-budget
+  labels:
+    app: actual-budget
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: actual-budget
+  template:
+    metadata:
+      labels:
+        app: actual-budget
+    spec:
+      containers:
+        - name: actual-budget
+          image: actualbudget/actual-server:latest@sha256:74385f8067f401e61f0be9e343c471705c42dfaa195295c40c5b2f15f4dcc9d4
+          ports:
+            - containerPort: 5006
+              name: http
+          env:
+            - name: ACTUAL_PORT
+              value: "5006"
+            - name: ACTUAL_HOSTNAME
+              value: "0.0.0.0"
+            - name: ACTUAL_UPLOAD_FILE
+              value: "/data/upload"
+            - name: TZ
+              value: "America/Anchorage"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 5006
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 5006
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+            requests:
+              memory: "128Mi"
+              cpu: "50m"
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: actual-budget-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: actual-budget
+  namespace: actual-budget
+spec:
+  selector:
+    app: actual-budget
+  ports:
+    - port: 5006
+      targetPort: 5006
+      nodePort: 30506
+      name: http
+  type: NodePort
