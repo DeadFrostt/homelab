@@ -33,10 +33,7 @@ spec:
               # stub exits 0 (pretending the browser opened), the SDK continues
               # polling, and the token gets saved once the user authorizes the
               # URL printed in `kubectl logs -f`.
-              cat > /usr/local/bin/xdg-open <<'EOF'
-#!/bin/sh
-exit 0
-EOF
+              printf '#!/bin/sh\nexit 0\n' > /usr/local/bin/xdg-open
               chmod +x /usr/local/bin/xdg-open
               mkdir -p /root/.config/poke
               export XDG_CONFIG_HOME=/root/.config
