@@ -16,7 +16,7 @@ spec:
       serviceAccountName: poke-gate-sa
       containers:
         - name: poke-gate
-          image: node:20-slim@sha256:3d0f05455dea2c82e2f76e7e2543964c30f6b7d673fc1a83286736d44fe4c41c
+          image: node:20-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0
           command: ["/bin/bash", "-c"]
           args:
             - |
