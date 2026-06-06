@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: actual-ai
+  namespace: actual-ai
+  labels:
+    app: actual-ai
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: actual-ai
+  template:
+    metadata:
+      labels:
+        app: actual-ai
+    spec:
+      containers:
+        - name: actual-ai
+          image: sakowicz/actual-ai:latest@sha256:f8706c63f75456e25c97aff8d87e87168dfa2782b9cea512f77cbc7f13e41b8c
+          env:
+            - name: ACTUAL_SERVER_URL
+              value: "https://actual-budget.actual-budget.svc.cluster.local:5006"
+            - name: ACTUAL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: actual-ai-env
+                  key: ACTUAL_PASSWORD
+            - name: ACTUAL_BUDGET_ID
+              value: "052da80b-7c30-49e4-893b-fe40e3fde6f2"
+            - name: CLASSIFICATION_SCHEDULE_CRON
+              value: "0 */6 * * *"
+            - name: LLM_PROVIDER
+              value: "openai"
+            - name: OPENAI_BASE_URL
+              value: "https://opencode.ai/zen/v1"
+            - name: OPENAI_MODEL
+              value: "minimax-m3-free"
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: actual-ai-env
+                  key: OPENAI_API_KEY
+            - name: FEATURES
+              value: '["classifyOnStartup","syncAccountsBeforeClassify","freeWebSearch","suggestNewCategories"]'
+            - name: NODE_TLS_REJECT_UNAUTHORIZED
+              value: "0"
+            - name: TZ
+              value: "America/Anchorage"
+          resources:
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+            requests:
+              memory: "128Mi"
+              cpu: "50m"
