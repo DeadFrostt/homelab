@@ -58,14 +58,29 @@ spec:
               echo "TUNNEL DEBUG: connection id = $CONN_ID"
               TOKEN=$(cat /root/.config/poke/credentials.json | sed 's/.*"token":"\([^"]*\)".*/\1/')
               BASE="${POKE_API:-https://poke.com/api/v1}"
-              echo "TUNNEL DEBUG: GET /mcp/connections/$CONN_ID"
-              curl -sS -i --max-time 10 "$BASE/mcp/connections/$CONN_ID" -H "Authorization: Bearer $TOKEN" | head -30
-              echo
-              echo "TUNNEL DEBUG: POST /mcp/connections/$CONN_ID/activate-tunnel"
-              curl -sS -i --max-time 10 -X POST "$BASE/mcp/connections/$CONN_ID/activate-tunnel" -H "Authorization: Bearer $TOKEN" | head -30
-              echo
-              echo "TUNNEL DEBUG: POST /mcp/connections/$CONN_ID/sync-tools"
-              curl -sS -i --max-time 10 -X POST "$BASE/mcp/connections/$CONN_ID/sync-tools" -H "Authorization: Bearer $TOKEN" | head -30
+              cat > /tmp/probe.mjs <<EOF
+const token = process.env.TOKEN;
+const base = process.env.BASE;
+const connId = process.env.CONN_ID;
+const headers = { 'Authorization': \`Bearer \${token}\`, 'Content-Type': 'application/json' };
+async function probe(label, method, path) {
+  const url = \`\${base}\${path}\`;
+  process.stdout.write(\`TUNNEL DEBUG: \${method} \${url}\\n\`);
+  try {
+    const r = await fetch(url, { method, headers });
+    const text = await r.text();
+    process.stdout.write(\`  status=\${r.status} content-type=\${r.headers.get('content-type')}\\n\`);
+    process.stdout.write(\`  body: \${text.slice(0, 2000)}\\n\\n\`);
+  } catch (e) {
+    process.stdout.write(\`  ERROR: \${e.message}\\n\\n\`);
+  }
+}
+await probe('get', 'GET', \`/mcp/connections/\${connId}\`);
+await probe('activate', 'POST', \`/mcp/connections/\${connId}/activate-tunnel\`);
+await probe('sync', 'POST', \`/mcp/connections/\${connId}/sync-tools\`);
+await probe('whoami', 'GET', '/user/profile');
+EOF
+              CONN_ID="$CONN_ID" TOKEN="$TOKEN" BASE="$BASE" node /tmp/probe.mjs
               echo
               echo "TUNNEL DEBUG: poke-gate log so far:"
               tail -30 /tmp/poke-gate.log
