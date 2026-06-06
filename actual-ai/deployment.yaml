@@ -35,7 +35,10 @@ spec:
             - name: OPENAI_BASE_URL
               value: "https://opencode.ai/zen/v1"
             - name: OPENAI_MODEL
-              value: "minimax-m3-free"
+              valueFrom:
+                secretKeyRef:
+                  name: actual-ai-env
+                  key: OPENAI_MODEL
             - name: OPENAI_API_KEY
               valueFrom:
                 secretKeyRef:
