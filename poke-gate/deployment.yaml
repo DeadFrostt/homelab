@@ -28,10 +28,25 @@ spec:
               curl -fsSLO "https://dl.k8s.io/release/$(curl -fsSL https://dl.k8s.io/release/stable.txt)/bin/linux/${ARCH}/kubectl"
               install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
               rm kubectl
+              # Stub xdg-open so the poke SDK's device-code login() flow doesn't
+              # crash on the async spawn ENOENT in this headless container. The
+              # stub exits 0 (pretending the browser opened), the SDK continues
+              # polling, and the token gets saved once the user authorizes the
+              # URL printed in `kubectl logs -f`.
+              cat > /usr/local/bin/xdg-open <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+              chmod +x /usr/local/bin/xdg-open
               mkdir -p /root/.config/poke
-              printf '{"token":"%s"}' "$POKE_API_KEY" > /root/.config/poke/credentials.json
-              chmod 600 /root/.config/poke/credentials.json
+              export XDG_CONFIG_HOME=/root/.config
+              npx -y poke login
               exec npx -y poke-gate --headless
+          env:
+            - name: PATH
+              value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+            - name: XDG_CONFIG_HOME
+              value: /root/.config
           envFrom:
             - secretRef:
                 name: poke-gate-env
