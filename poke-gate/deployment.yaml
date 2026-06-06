@@ -16,24 +16,21 @@ spec:
       serviceAccountName: poke-gate-sa
       containers:
         - name: poke-gate
-          image: node:20-slim
+          image: node:20-slim@sha256:3d0f05455dea2c82e2f76e7e2543964c30f6b7d673fc1a83286736d44fe4c41c
           command: ["/bin/bash", "-c"]
           args:
             - |
-              apt-get update && apt-get install -y curl ca-certificates
-              # Install kubectl
+              set -e
+              apt-get update
+              apt-get install -y --no-install-recommends curl ca-certificates procps
+              rm -rf /var/lib/apt/lists/*
               curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
               install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
-              # Install gh cli
-              curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-              chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
-              echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-              apt-get update && apt-get install gh -y
-              # Run poke-gate in headless mode
-              npx poke-gate --headless
-          env:
-            - name: BROWSER
-              value: "none"
+              rm kubectl
+              exec npx -y poke-gate --headless
+          envFrom:
+            - secretRef:
+                name: poke-gate-env
           resources:
             requests:
               cpu: "50m"

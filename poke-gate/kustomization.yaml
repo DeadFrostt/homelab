@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: poke-gate
+resources:
+  - namespace.yaml
+  - networkpolicy.yaml
+  - infisical-secret.yaml
+  - serviceaccount.yaml
+  - clusterrolebinding.yaml
+  - pvc.yaml
+  - deployment.yaml
+  - limitrange.yaml
