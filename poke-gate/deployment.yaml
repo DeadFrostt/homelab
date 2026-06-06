@@ -38,7 +38,38 @@ spec:
               mkdir -p /root/.config/poke
               export XDG_CONFIG_HOME=/root/.config
               npx -y poke login
-              exec npx -y poke-gate --headless
+              # Start poke-gate in the background so we can probe Poke's MCP API
+              # in parallel and log the raw activate-tunnel / sync-tools responses.
+              npx -y poke-gate --headless > /tmp/poke-gate.log 2>&1 &
+              POKE_GATE_PID=$!
+              echo "poke-gate started, pid=$POKE_GATE_PID, waiting for tunnel..."
+              # Wait for the connection id to appear in the log
+              for i in $(seq 1 60); do
+                CONN_ID=$(grep -oE 'Tunnel connected \([a-f0-9-]+\)' /tmp/poke-gate.log 2>/dev/null | head -1 | sed 's/Tunnel connected (//;s/)//')
+                if [ -n "$CONN_ID" ]; then break; fi
+                sleep 1
+              done
+              if [ -z "$CONN_ID" ]; then
+                echo "TUNNEL DEBUG: no connection id after 60s"
+                tail -50 /tmp/poke-gate.log
+                kill $POKE_GATE_PID 2>/dev/null
+                exit 1
+              fi
+              echo "TUNNEL DEBUG: connection id = $CONN_ID"
+              TOKEN=$(cat /root/.config/poke/credentials.json | sed 's/.*"token":"\([^"]*\)".*/\1/')
+              BASE="${POKE_API:-https://poke.com/api/v1}"
+              echo "TUNNEL DEBUG: GET /mcp/connections/$CONN_ID"
+              curl -sS -i --max-time 10 "$BASE/mcp/connections/$CONN_ID" -H "Authorization: Bearer $TOKEN" | head -30
+              echo
+              echo "TUNNEL DEBUG: POST /mcp/connections/$CONN_ID/activate-tunnel"
+              curl -sS -i --max-time 10 -X POST "$BASE/mcp/connections/$CONN_ID/activate-tunnel" -H "Authorization: Bearer $TOKEN" | head -30
+              echo
+              echo "TUNNEL DEBUG: POST /mcp/connections/$CONN_ID/sync-tools"
+              curl -sS -i --max-time 10 -X POST "$BASE/mcp/connections/$CONN_ID/sync-tools" -H "Authorization: Bearer $TOKEN" | head -30
+              echo
+              echo "TUNNEL DEBUG: poke-gate log so far:"
+              tail -30 /tmp/poke-gate.log
+              exec tail -f /tmp/poke-gate.log
           env:
             - name: PATH
               value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
