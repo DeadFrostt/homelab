@@ -28,7 +28,7 @@ spec:
           command: ["sh", "-c", "ip -6 rule del from all to all table 51820 2>/dev/null || true"]
       containers:
         - name: gluetun
-          image: qmcgaw/gluetun@sha256:10b4895fde4499c2d1d9fbd8e681d040ede0efe8c6cfe5d0c51daf0461836ee8
+          image: qmcgaw/gluetun@sha256:343ddffa6bf9be7740bdd27317df2a2ecfc7e6d12e5532f98d23f5052f15be11
           securityContext:
             capabilities:
               add:

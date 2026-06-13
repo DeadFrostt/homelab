@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: zipline
-          image: ghcr.io/diced/zipline:latest@sha256:b8babbbcf4fef89c0c620e0539a47d908c750c251614309a7662ea4d8a7f501f
+          image: ghcr.io/diced/zipline:latest@sha256:6140981c5f9e9d0b38eedabc78623cbb360b1bd83c14e0210b229bdb20e3a473
           ports:
             - containerPort: 3000
               name: http
