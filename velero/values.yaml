@@ -26,6 +26,7 @@ configuration:
         region: us-east-005
         s3ForcePathStyle: "true"
         s3Url: https://s3.us-east-005.backblazeb2.com
+        tagging: ""
   volumeSnapshotLocation: []
 
 snapshotsEnabled: false
