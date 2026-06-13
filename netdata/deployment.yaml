@@ -20,7 +20,7 @@ spec:
       dnsPolicy: ClusterFirstWithHostNet
       containers:
         - name: netdata
-          image: netdata/netdata@sha256:ef8f453b3e7729d19a51e4b8b5cfd0660dce619ce6b1b934126754487093660e
+          image: netdata/netdata@sha256:3149736a33457ed3662feead24f821d2ca25080ca483c8360a4eadd6fad002fd
           securityContext:
             capabilities:
               add:
