@@ -59,6 +59,7 @@ schedules:
       ttl: "336h"
       storageLocation: default
       includedNamespaces:
+        - actual-budget
         - authentik
         - couch-db
         - degoog
