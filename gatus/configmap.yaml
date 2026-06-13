@@ -82,6 +82,54 @@ data:
         alerts:
           - type: webhook
 
+      - name: Vaultwarden
+        group: Apps
+        url: "http://vaultwarden.vaultwarden.svc.cluster.local/alive"
+        interval: 60s
+        ui:
+          hide-url: true
+          hide-hostname: true
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: webhook
+
+      - name: Zipline
+        group: Apps
+        url: "http://zipline.zipline.svc.cluster.local:3000/api/healthcheck"
+        interval: 60s
+        ui:
+          hide-url: true
+          hide-hostname: true
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: webhook
+
+      - name: Pelican
+        group: Apps
+        url: "http://panel.pelican.svc.cluster.local/up"
+        interval: 60s
+        ui:
+          hide-url: true
+          hide-hostname: true
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: webhook
+
+      - name: Actual Budget
+        group: Apps
+        url: "http://actual-budget.actual-budget.svc.cluster.local:5006/"
+        interval: 60s
+        ui:
+          hide-url: true
+          hide-hostname: true
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: webhook
+
       - name: Authentik (Public)
         group: Apps
         url: "https://sso.pleasedontdmca.me"
@@ -192,5 +240,41 @@ data:
           hide-hostname: true
         conditions:
           - "[CONNECTED] == true"
+        alerts:
+          - type: webhook
+
+      - name: Infisical
+        group: Infrastructure
+        url: "http://infisical.infisical.svc.cluster.local:8080/api/status"
+        interval: 60s
+        ui:
+          hide-url: true
+          hide-hostname: true
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: webhook
+
+      - name: ArgoCD
+        group: Infrastructure
+        url: "http://argocd-server.argocd.svc.cluster.local/healthz"
+        interval: 60s
+        ui:
+          hide-url: true
+          hide-hostname: true
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: webhook
+
+      - name: Flaresolverr
+        group: Infrastructure
+        url: "http://flaresolverr.flaresolverr.svc.cluster.local:8191/"
+        interval: 60s
+        ui:
+          hide-url: true
+          hide-hostname: true
+        conditions:
+          - "[STATUS] == 200"
         alerts:
           - type: webhook

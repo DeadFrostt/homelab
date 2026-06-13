@@ -46,6 +46,18 @@ spec:
               mountPath: /pelican-data
             - name: logs
               mountPath: /var/www/html/storage/logs
+          livenessProbe:
+            httpGet:
+              path: /up
+              port: 80
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /up
+              port: 80
+            initialDelaySeconds: 15
+            periodSeconds: 10
           resources:
             limits:
               memory: "1Gi"
