@@ -63,6 +63,15 @@
     },
 
     {
+      // Hold velero-plugin-for-aws at v1.13.2. v1.14.x sends an unconditional
+      // x-amz-tagging header that Backblaze B2 rejects (400), failing every
+      // backup's metadata write. See velero #9931 / #9804; fix is plugin PR #299
+      // (unreleased). Remove this block once a release past v1.14.2 ships with it.
+      matchPackageNames: ["velero/velero-plugin-for-aws"],
+      enabled: false,
+    },
+
+    {
       matchPackageNames: [
         "argoproj/argo-cd",
         "quay.io/argoproj/argocd",

@@ -1,6 +1,10 @@
 initContainers:
   - name: velero-plugin-for-aws
-    image: velero/velero-plugin-for-aws:v1.14.1
+    # Pinned to v1.13.2: v1.14.x regressed an unconditional x-amz-tagging header
+    # that strict S3-compatible stores (Backblaze B2) reject with a 400, failing
+    # the velero-backup.json metadata write. See velero #9931 / #9804, fix in
+    # plugin PR #299 (unreleased). Re-pin forward once a release past v1.14.2 ships.
+    image: velero/velero-plugin-for-aws:v1.13.2@sha256:25c3a0a043fc396a0593a3da0aa16ed1f39df74883bda42c4588fc8877b72bde
     imagePullPolicy: IfNotPresent
     volumeMounts:
       - mountPath: /target
@@ -26,7 +30,6 @@ configuration:
         region: us-east-005
         s3ForcePathStyle: "true"
         s3Url: https://s3.us-east-005.backblazeb2.com
-        tagging: ""
   volumeSnapshotLocation: []
 
 snapshotsEnabled: false
