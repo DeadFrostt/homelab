@@ -12,7 +12,7 @@ metadata:
 rules:
   - apiGroups: ["velero.io"]
     resources: ["backups"]
-    verbs: ["get", "list"]
+    verbs: ["get", "list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -28,122 +28,205 @@ roleRef:
   kind: Role
   name: velero-discord-notifier
 ---
-apiVersion: batch/v1
-kind: CronJob
+# Event-driven notifier: a long-lived watch on Backup resources that posts to
+# Discord the moment a backup reaches a terminal phase (Completed / Failed /
+# PartiallyFailed). Replaces the old 09:15 CronJob — no hardcoded schedule, the
+# webhook fires on actual completion. On startup it seeds existing terminal
+# backups as already-notified so a pod restart never re-spams history.
+apiVersion: apps/v1
+kind: Deployment
 metadata:
   name: velero-discord-notifier
   namespace: velero
+  labels:
+    app: velero-discord-notifier
 spec:
-  schedule: "15 9 * * *"
-  concurrencyPolicy: Forbid
-  successfulJobsHistoryLimit: 1
-  failedJobsHistoryLimit: 3
-  jobTemplate:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: velero-discord-notifier
+  template:
+    metadata:
+      labels:
+        app: velero-discord-notifier
     spec:
-      backoffLimit: 3
-      template:
-        spec:
-          serviceAccountName: velero-discord-notifier
-          automountServiceAccountToken: true
-          restartPolicy: OnFailure
-          containers:
-            - name: notifier
-              image: python:3.14-alpine@sha256:26730869004e2b9c4b9ad09cab8625e81d256d1ce97e72df5520e806b1709f92
-              env:
-                - name: DISCORD_WEBHOOK_URL
-                  valueFrom:
-                    secretKeyRef:
-                      name: velero-discord-webhook
-                      key: DISCORD_WEBHOOK_URL
-                - name: BACKUP_NAMESPACE
-                  value: velero
-              command: ["python", "-c"]
-              args:
-                - |
-                  import json
-                  import os
-                  import ssl
-                  import time
-                  import urllib.error
-                  import urllib.request
-                  from datetime import datetime, timezone
+      serviceAccountName: velero-discord-notifier
+      automountServiceAccountToken: true
+      containers:
+        - name: notifier
+          image: python:3.14-alpine@sha256:26730869004e2b9c4b9ad09cab8625e81d256d1ce97e72df5520e806b1709f92
+          env:
+            - name: DISCORD_WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: velero-discord-webhook
+                  key: DISCORD_WEBHOOK_URL
+            - name: BACKUP_NAMESPACE
+              value: velero
+            - name: CLUSTER_NAME
+              value: yeager
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          command: ["python", "-u", "-c"]
+          args:
+            - |
+              import json
+              import os
+              import ssl
+              import time
+              import urllib.error
+              import urllib.request
+              from datetime import datetime, timezone
 
-                  def urlopen_retry(req, attempts=6, **kwargs):
-                      # External DNS (discord.com) intermittently throws EAI_AGAIN on a
-                      # cold pod, so retry transient network/DNS errors with backoff.
-                      for attempt in range(attempts):
-                          try:
-                              return urllib.request.urlopen(req, **kwargs)
-                          except (urllib.error.URLError, OSError):
-                              if attempt == attempts - 1:
-                                  raise
-                              time.sleep(2 ** attempt)
+              NS = os.environ.get("BACKUP_NAMESPACE", "velero")
+              WEBHOOK = os.environ["DISCORD_WEBHOOK_URL"]
+              CLUSTER = os.environ.get("CLUSTER_NAME", "k3s")
+              SA = "/var/run/secrets/kubernetes.io/serviceaccount"
+              BASE = f"https://kubernetes.default.svc/apis/velero.io/v1/namespaces/{NS}/backups"
+              TOKEN = open(f"{SA}/token", encoding="utf-8").read().strip()
+              CTX = ssl.create_default_context(cafile=f"{SA}/ca.crt")
 
-                  namespace = os.environ.get("BACKUP_NAMESPACE", "velero")
-                  webhook = os.environ["DISCORD_WEBHOOK_URL"]
-                  token = open("/var/run/secrets/kubernetes.io/serviceaccount/token", "r", encoding="utf-8").read().strip()
-                  ca = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
-                  api = f"https://kubernetes.default.svc/apis/velero.io/v1/namespaces/{namespace}/backups"
-                  ctx = ssl.create_default_context(cafile=ca)
-                  req = urllib.request.Request(api, headers={"Authorization": f"Bearer {token}"})
-                  resp = urlopen_retry(req, context=ctx, timeout=30)
-                  backups = json.load(resp).get("items", [])
+              TERMINAL = {"Completed", "Failed", "PartiallyFailed", "FailedValidation"}
+              COLOR = {"Completed": 0x2ECC71, "PartiallyFailed": 0xF1C40F,
+                       "Failed": 0xE74C3C, "FailedValidation": 0xE74C3C}
+              EMOJI = {"Completed": "✅", "PartiallyFailed": "⚠️",
+                       "Failed": "❌", "FailedValidation": "❌"}
 
-                  if not backups:
-                      raise SystemExit("No Velero backups found")
+              def api(url, timeout=60):
+                  req = urllib.request.Request(url, headers={"Authorization": f"Bearer {TOKEN}"})
+                  return urllib.request.urlopen(req, context=CTX, timeout=timeout)
 
-                  backups.sort(key=lambda b: b.get("status", {}).get("startTimestamp") or b.get("metadata", {}).get("creationTimestamp", ""), reverse=True)
-                  backup = backups[0]
-                  meta = backup.get("metadata", {})
-                  spec = backup.get("spec", {})
-                  status = backup.get("status", {})
-                  phase = status.get("phase", "Unknown")
-                  started = status.get("startTimestamp", "unknown")
-                  completed = status.get("completionTimestamp", "not completed")
-                  expires = status.get("expiration", "unknown")
-                  progress = status.get("progress", {})
-                  backed = progress.get("itemsBackedUp", 0)
-                  total = progress.get("totalItems", 0)
-                  warnings = status.get("warnings", 0)
-                  errors = status.get("errors", 0)
-                  ttl = spec.get("ttl", "default")
-                  location = spec.get("storageLocation", "default")
-                  included = ", ".join(spec.get("includedNamespaces", [])) or "default"
-                  excluded = ", ".join(spec.get("excludedNamespaces", [])) or "none"
-                  fs_backup = str(spec.get("defaultVolumesToFsBackup", False)).lower()
-                  snapshot = str(spec.get("snapshotVolumes", False)).lower()
+              def epoch(ts):
+                  return int(datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp())
 
-                  color = 0x2ecc71 if phase == "Completed" and errors == 0 else 0xf1c40f if phase == "PartiallyFailed" or warnings else 0xe74c3c
-                  title = f"Velero backup {phase}: {meta.get('name', 'unknown')}"
+              def ts_field(ts):
+                  # Discord dynamic timestamp: renders in each viewer's local timezone.
+                  if not ts:
+                      return "—"
+                  try:
+                      return f"<t:{epoch(ts)}:F>"
+                  except Exception:
+                      return ts
+
+              def duration(start, end):
+                  if not (start and end):
+                      return "—"
+                  try:
+                      secs = max(0, epoch(end) - epoch(start))
+                      h, rem = divmod(secs, 3600)
+                      m, s = divmod(rem, 60)
+                      out = (f"{h}h " if h else "") + (f"{m}m " if (h or m) else "") + f"{s}s"
+                      return out.strip()
+                  except Exception:
+                      return "—"
+
+              def build_embed(b):
+                  meta, spec, st = b.get("metadata", {}), b.get("spec", {}), b.get("status", {})
+                  phase = st.get("phase", "Unknown")
+                  prog = st.get("progress", {}) or {}
+                  inc = spec.get("includedNamespaces", []) or []
                   fields = [
-                      {"name": "Items", "value": f"{backed}/{total}", "inline": True},
-                      {"name": "Warnings / Errors", "value": f"{warnings} / {errors}", "inline": True},
-                      {"name": "Storage", "value": location, "inline": True},
-                      {"name": "Started", "value": started, "inline": False},
-                      {"name": "Completed", "value": completed, "inline": False},
-                      {"name": "Expires", "value": expires, "inline": False},
-                      {"name": "TTL", "value": ttl, "inline": True},
-                      {"name": "Filesystem Backup", "value": fs_backup, "inline": True},
-                      {"name": "Snapshots", "value": snapshot, "inline": True},
-                      {"name": "Included Namespaces", "value": included[:1024], "inline": False},
-                      {"name": "Excluded Namespaces", "value": excluded[:1024], "inline": False},
+                      {"name": "Status", "value": f"{EMOJI.get(phase, '\U0001F535')} **{phase}**", "inline": True},
+                      {"name": "Duration", "value": duration(st.get("startTimestamp"), st.get("completionTimestamp")), "inline": True},
+                      {"name": "Items", "value": f"{prog.get('itemsBackedUp', 0)}/{prog.get('totalItems', 0)}", "inline": True},
+                      {"name": "Warnings", "value": str(st.get("warnings", 0)), "inline": True},
+                      {"name": "Errors", "value": str(st.get("errors", 0)), "inline": True},
+                      {"name": "Storage", "value": spec.get("storageLocation", "default"), "inline": True},
+                      {"name": "Started", "value": ts_field(st.get("startTimestamp")), "inline": False},
+                      {"name": "Completed", "value": ts_field(st.get("completionTimestamp")), "inline": False},
+                      {"name": "Expires", "value": ts_field(st.get("expiration")), "inline": False},
+                      {"name": f"Namespaces ({len(inc)})", "value": (", ".join(inc) or "*")[:1024], "inline": False},
                   ]
-                  payload = {
-                      "embeds": [{
-                          "title": title,
-                          "color": color,
-                          "fields": fields,
-                          "timestamp": datetime.now(timezone.utc).isoformat(),
-                          "footer": {"text": "k3s Velero backups"},
-                      }]
+                  if st.get("failureReason"):
+                      fields.append({"name": "Failure Reason", "value": st["failureReason"][:1024], "inline": False})
+                  return {
+                      "title": f"{EMOJI.get(phase, '\U0001F535')} Velero Backup {phase}",
+                      "description": f"`{meta.get('name', 'unknown')}`",
+                      "color": COLOR.get(phase, 0x3498DB),
+                      "fields": fields,
+                      "timestamp": datetime.now(timezone.utc).isoformat(),
+                      "footer": {"text": f"Velero • {CLUSTER}"},
                   }
-                  data = json.dumps(payload).encode("utf-8")
+
+              def post_discord(embed):
+                  body = json.dumps({"embeds": [embed]}).encode("utf-8")
                   req = urllib.request.Request(
-                      webhook,
-                      data=data,
-                      headers={"Content-Type": "application/json", "User-Agent": "k3s-velero-notifier/1.0"},
-                      method="POST",
-                  )
-                  resp = urlopen_retry(req, timeout=30)
-                  if resp.status >= 300:
-                      raise SystemExit(f"Discord webhook failed: HTTP {resp.status}")
+                      WEBHOOK, data=body, method="POST",
+                      headers={"Content-Type": "application/json", "User-Agent": "k3s-velero-notifier/2.0"})
+                  # External DNS (discord.com) can throw EAI_AGAIN on a cold pod; retry with backoff.
+                  for attempt in range(6):
+                      try:
+                          with urllib.request.urlopen(req, timeout=30) as r:
+                              if r.status >= 300:
+                                  raise SystemExit(f"Discord webhook HTTP {r.status}")
+                              return
+                      except (urllib.error.URLError, OSError):
+                          if attempt == 5:
+                              raise
+                          time.sleep(2 ** attempt)
+
+              notified = set()
+
+              def handle(b):
+                  st = b.get("status", {})
+                  uid = b.get("metadata", {}).get("uid")
+                  if st.get("phase") in TERMINAL and uid and uid not in notified:
+                      try:
+                          post_discord(build_embed(b))
+                          notified.add(uid)
+                          print(f"notified {b['metadata']['name']} -> {st.get('phase')}")
+                      except Exception as e:
+                          print(f"post failed for {b.get('metadata', {}).get('name')}: {e}")
+
+              def list_backups():
+                  with api(BASE) as r:
+                      return json.load(r)
+
+              # Seed: mark all currently-terminal backups as already notified so a
+              # (re)start never replays history, and capture the list resourceVersion.
+              rv = None
+              try:
+                  data = list_backups()
+                  rv = data.get("metadata", {}).get("resourceVersion")
+                  for b in data.get("items", []):
+                      if b.get("status", {}).get("phase") in TERMINAL:
+                          notified.add(b["metadata"]["uid"])
+                  print(f"seeded {len(notified)} terminal backups; watching from rv={rv}")
+              except Exception as e:
+                  print(f"initial list failed: {e}")
+
+              while True:
+                  try:
+                      if rv is None:
+                          data = list_backups()
+                          rv = data.get("metadata", {}).get("resourceVersion")
+                          for b in data.get("items", []):
+                              handle(b)  # catch up anything that finished while disconnected
+                      url = f"{BASE}?watch=1&allowWatchBookmarks=true&resourceVersion={rv}&timeoutSeconds=300"
+                      with api(url, timeout=600) as r:
+                          for line in r:
+                              line = line.strip()
+                              if not line:
+                                  continue
+                              ev = json.loads(line)
+                              obj = ev.get("object", {})
+                              rv = obj.get("metadata", {}).get("resourceVersion", rv)
+                              if ev.get("type") in ("ADDED", "MODIFIED"):
+                                  handle(obj)
+                  except urllib.error.HTTPError as e:
+                      if e.code == 410:  # resourceVersion too old -> relist
+                          print("watch resourceVersion expired; relisting")
+                          rv = None
+                          continue
+                      print(f"watch HTTP {e.code}; backing off")
+                      time.sleep(5)
+                  except Exception as e:
+                      print(f"watch error: {e}; backing off")
+                      time.sleep(5)
