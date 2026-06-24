@@ -55,7 +55,10 @@ spec:
       shared_buffers: "256MB"
 
   backup:
-    retentionPolicy: "14d"
+    # Authentik is a chatty writer (~150 MiB WAL/day). It's an SSO config store,
+    # so deep point-in-time recovery has little value; 7d keeps the B2 WAL
+    # footprint ~halved vs 14d. See cnpg backup retention notes.
+    retentionPolicy: "7d"
     barmanObjectStore:
       serverName: authentik-pg-v2
       destinationPath: "s3://k3s-backups-yeager/cnpg/authentik"
