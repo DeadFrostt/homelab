@@ -69,9 +69,8 @@ spec:
               cpu: "50m"
       volumes:
         - name: config
-          hostPath:
-            path: /home/ubuntu/docker-compose/syncthing/config
-            type: Directory
+          persistentVolumeClaim:
+            claimName: syncthing-config
         - name: data
           hostPath:
             path: /home/ubuntu
