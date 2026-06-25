@@ -72,6 +72,16 @@
     },
 
     {
+      // Hold netdata/netdata at the pre-2026-06-13 digest. Newer images enable
+      // the OTel + otel-signal-viewer plugins by default which, with the
+      // systemd-journal plugin, thrash the disk (~90 MB/s reads) and melt the
+      // node — load 60+, crash-looping the CNPG operator. See netdata #16746.
+      // Unblock only once we mount a netdata.conf disabling those plugins.
+      matchPackageNames: ["netdata/netdata"],
+      enabled: false,
+    },
+
+    {
       matchPackageNames: [
         "argoproj/argo-cd",
         "quay.io/argoproj/argocd",
