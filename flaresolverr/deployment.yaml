@@ -47,7 +47,8 @@ spec:
             periodSeconds: 10
           resources:
             limits:
-              memory: "256Mi"
+              # headless Chrome spikes hard at browser launch; 256Mi OOMs on startup
+              memory: "512Mi"
               cpu: "500m"
             requests:
               memory: "128Mi"
