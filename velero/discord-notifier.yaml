@@ -191,16 +191,28 @@ spec:
 
               # Seed: mark all currently-terminal backups as already notified so a
               # (re)start never replays history, and capture the list resourceVersion.
+              # A cold pod regularly loses the CoreDNS race on its first API call
+              # (EAI_AGAIN / "Try again"); retry with backoff like post_discord does,
+              # so a failed seed never falls through to the rv-None path below with an
+              # empty `notified` set and replays the entire backup history to Discord.
               rv = None
-              try:
-                  data = list_backups()
-                  rv = data.get("metadata", {}).get("resourceVersion")
-                  for b in data.get("items", []):
-                      if b.get("status", {}).get("phase") in TERMINAL:
-                          notified.add(b["metadata"]["uid"])
-                  print(f"seeded {len(notified)} terminal backups; watching from rv={rv}")
-              except Exception as e:
-                  print(f"initial list failed: {e}")
+              for attempt in range(8):
+                  try:
+                      data = list_backups()
+                      rv = data.get("metadata", {}).get("resourceVersion")
+                      for b in data.get("items", []):
+                          if b.get("status", {}).get("phase") in TERMINAL:
+                              notified.add(b["metadata"]["uid"])
+                      print(f"seeded {len(notified)} terminal backups; watching from rv={rv}")
+                      break
+                  except Exception as e:
+                      print(f"initial list failed (attempt {attempt + 1}/8): {e}")
+                      time.sleep(min(2 ** attempt, 30))
+              else:
+                  # Could not seed after retries: exit so kubelet recreates us with a
+                  # fresh DNS attempt, rather than entering the watch loop empty and
+                  # re-notifying every historical backup.
+                  raise SystemExit("could not seed backups after retries; exiting for restart")
 
               while True:
                   try:
