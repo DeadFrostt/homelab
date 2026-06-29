@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: haproxy
-          image: haproxy:3.4-alpine@sha256:f5437564f819793be4614085ee0bafae45d0579fa2b97f9c76449e60436476e0
+          image: haproxy:3.4-alpine@sha256:820658d9303227313f1feb164443f07319d604fed68982c918611dcaea8fb775
           volumeMounts:
             - name: haproxy-config
               mountPath: /usr/local/etc/haproxy/haproxy.cfg
