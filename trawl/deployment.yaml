@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trawl
+  namespace: trawl
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: trawl
+  strategy:
+    # Browser pool + 1Gi /dev/shm is heavy; don't run two copies at once.
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: trawl
+    spec:
+      containers:
+        - name: trawl
+          image: ghcr.io/germondai/trawl:latest@sha256:671a31738a988a3e0ad598553e034e95edd2ea8a8d2f9b64dbcb974d42904287
+          ports:
+            - containerPort: 8191
+              name: http
+          env:
+            - name: PORT_API
+              value: "8191"
+            - name: REDIS_URL
+              value: "redis://redis:6379"
+            - name: BROWSER_POOL_SIZE
+              value: "5"
+          volumeMounts:
+            # Camoufox/Firefox needs a large /dev/shm or tabs crash; compose uses shm_size: 1gb.
+            - name: dshm
+              mountPath: /dev/shm
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8191
+            # First boot warms the browser pool (~15-30s); give it room.
+            initialDelaySeconds: 90
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8191
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 6
+          resources:
+            limits:
+              memory: "3Gi"
+              cpu: "2"
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+      volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: trawl
+  namespace: trawl
+spec:
+  selector:
+    app: trawl
+  ports:
+    - port: 8191
+      targetPort: 8191
+      nodePort: 30192
+      name: http
+  type: NodePort
