@@ -19,7 +19,7 @@ spec:
     spec:
       initContainers:
         - name: fix-ipv6
-          image: busybox:latest@sha256:fd8d9aa63ba2f0982b5304e1ee8d3b90a210bc1ffb5314d980eb6962f1a9715d
+          image: busybox:latest@sha256:1487d0af5f52b4ba31c7e465126ee2123fe3f2305d638e7827681e7cf6c83d5e
           securityContext:
             capabilities:
               add:
@@ -28,7 +28,7 @@ spec:
           command: ["sh", "-c", "ip -6 rule del from all to all table 51820 2>/dev/null || true"]
       containers:
         - name: gluetun
-          image: qmcgaw/gluetun@sha256:b0ee2135e6ba52ad3f102aae9663707cd1c9531485117067a380d3b2b6dd991d
+          image: qmcgaw/gluetun@sha256:bd84f4f090ca61170c8329a72d4f451255b01f6489486a621bfcb89749fb80ab
           securityContext:
             capabilities:
               add:
@@ -82,9 +82,9 @@ spec:
               cpu: "500m"
             requests:
               memory: "64Mi"
-              cpu: "25m"
+              cpu: "50m"
         - name: cobalt-api
-          image: ghcr.io/zimpatrick/cobalt:staging@sha256:a4357be1523b1c2823873c53db0270c67e6f71856c4eaf22f8d62205da372bb8
+          image: ghcr.io/zimpatrick/cobalt:staging@sha256:eaa35c2735ee83f3ee05ccf294cedf1e93c1264bc49f24e13e8df5fb564fd1a1
           env:
             - name: API_URL
               value: "https://cobalt.pleasedontdmca.me/"
@@ -118,10 +118,10 @@ spec:
           resources:
             limits:
               memory: "512Mi"
-              cpu: "750m"
+              cpu: "1000m"
             requests:
               memory: "256Mi"
-              cpu: "50m"
+              cpu: "250m"
       volumes:
         - name: dev-net-tun
           hostPath:
