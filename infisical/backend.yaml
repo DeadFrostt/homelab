@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: infisical
-          image: infisical/infisical:latest@sha256:75e74ee1cc11bdc1b504acb9846940484501ce3f1c54cb3af77cdd09a6c05893
+          image: infisical/infisical:latest@sha256:a6fac8b2927efa40995835593230f035f669b8f1184a4c2a86e255d69a896c6e
           ports:
             - containerPort: 8080
               name: http
