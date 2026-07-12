@@ -20,13 +20,7 @@ spec:
       dnsPolicy: ClusterFirstWithHostNet
       containers:
         - name: netdata
-          # Pinned to the pre-2026-06-13 digest. The newer image is built with
-          # --enable-plugin-otel / --enable-plugin-otel-signal-viewer on by
-          # default; those plus systemd-journal.plugin scanning a 3.6 GB journal
-          # read sda at ~90 MB/s nonstop, saturating the disk (load 60+ on 4 CPUs)
-          # and crash-looping the CNPG operator (lease timeouts). See netdata
-          # issue #16746. Re-pin forward only with otel+journal plugins disabled.
-          image: netdata/netdata@sha256:ef8f453b3e7729d19a51e4b8b5cfd0660dce619ce6b1b934126754487093660e
+          image: netdata/netdata@sha256:2330e67d4543b9cd431f462f3ef8e53104ba5d84429ee6ca5a4653b316151830
           securityContext:
             capabilities:
               add:
