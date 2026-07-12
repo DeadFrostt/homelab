@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: couchdb
-          image: couchdb:3.5.2@sha256:7219f4799fec01f35adcc445b9333cfd890bf9d2957e0ae32a345017dd0563a4
+          image: couchdb:3.5.1@sha256:f931b65dd7406c03e1c83ffc7c04b6d551dc18df1ce8581a04f17cdffcb20e23
           ports:
             - containerPort: 5984
               name: http
@@ -23,10 +23,7 @@ spec:
             - name: TZ
               value: "America/Chicago"
             - name: COUCHDB_USER
-              valueFrom:
-                secretKeyRef:
-                  name: couch-db-env
-                  key: COUCHDB_USER
+              value: "obsidian_user"
             - name: COUCHDB_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -55,7 +52,7 @@ spec:
               cpu: "500m"
             requests:
               memory: "128Mi"
-              cpu: "50m"
+              cpu: "100m"
       volumes:
         - name: data
           persistentVolumeClaim:
@@ -95,7 +92,7 @@ spec:
     spec:
       containers:
         - name: cloudflared
-          image: cloudflare/cloudflared:latest@sha256:188bb03589a32affed3cf4d0590565ffe67b78866e6b5582574afab2b705bafe
+          image: cloudflare/cloudflared:latest@sha256:59bab8d3aceec09bf6bdb07d6beca0225ca5cd7ab79436a87ea97978fe1dc4f9
           args:
             - tunnel
             - --no-autoupdate
@@ -112,4 +109,4 @@ spec:
               cpu: "200m"
             requests:
               memory: "32Mi"
-              cpu: "25m"
+              cpu: "50m"
