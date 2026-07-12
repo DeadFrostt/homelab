@@ -24,7 +24,7 @@ spec:
       serviceAccountName: tailscale
       containers:
         - name: tailscale
-          image: tailscale/tailscale:latest@sha256:d54b2e6a9c09f0e5ec52e82b9ad4af3d446b54a7c08075e92f11c39dd410105f
+          image: tailscale/tailscale:latest@sha256:25cde9ad76020b0e29229136d0c38b5962e9a0e1774ffac9b0df68e4a37d6cf0
           securityContext:
             capabilities:
               add:
@@ -64,7 +64,7 @@ spec:
               memory: "64Mi"
               cpu: "50m"
         - name: cobalt-api
-          image: ghcr.io/zimpatrick/cobalt:staging@sha256:a4357be1523b1c2823873c53db0270c67e6f71856c4eaf22f8d62205da372bb8
+          image: ghcr.io/zimpatrick/cobalt:staging@sha256:0c288993376d381d2389e67f9eb48cb0eeaa8dabe69856ef615204516222e927
           env:
             - name: API_URL
               value: "https://cobalt.pleasedontdmca.me/"
