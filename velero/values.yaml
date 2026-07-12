@@ -1,10 +1,6 @@
 initContainers:
   - name: velero-plugin-for-aws
-    # Pinned to v1.13.2: v1.14.x regressed an unconditional x-amz-tagging header
-    # that strict S3-compatible stores (Backblaze B2) reject with a 400, failing
-    # the velero-backup.json metadata write. See velero #9931 / #9804, fix in
-    # plugin PR #299 (unreleased). Re-pin forward once a release past v1.14.2 ships.
-    image: velero/velero-plugin-for-aws:v1.13.2@sha256:25c3a0a043fc396a0593a3da0aa16ed1f39df74883bda42c4588fc8877b72bde
+    image: velero/velero-plugin-for-aws:v1.14.0
     imagePullPolicy: IfNotPresent
     volumeMounts:
       - mountPath: /target
@@ -62,16 +58,17 @@ schedules:
       ttl: "336h"
       storageLocation: default
       includedNamespaces:
-        - actual-budget
-        - authentik
-        - couch-db
-        - degoog
-        - infisical
-        - matrix
-        - mealie
-        - pelican
-        - termix
-        - vaultwarden
-        - zipline
+        - "*"
+      excludedNamespaces:
+        - argocd
+        - cert-manager
+        - default
+        - external-secrets
+        - infisical-operator
+        - infisical-operator-system
+        - kube-node-lease
+        - kube-public
+        - kube-system
+        - velero
       defaultVolumesToFsBackup: true
       snapshotVolumes: false
