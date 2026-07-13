@@ -70,6 +70,6 @@ spec:
   ports:
     - port: 5006
       targetPort: 5006
-      nodePort: 30506
+      nodePort: 30507
       name: http
   type: NodePort
