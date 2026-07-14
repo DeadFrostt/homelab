@@ -50,3 +50,28 @@ spec:
           port: 5006
   egress:
     - {}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-actual-http-api
+  namespace: actual-budget
+spec:
+  podSelector:
+    matchLabels:
+      app: actual-http-api
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: 5007
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: actual-budget
+      ports:
+        - protocol: TCP
+          port: 5006

@@ -1,0 +1,97 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: actual-budget-api-data
+  namespace: actual-budget
+spec:
+  storageClassName: local-path
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: actual-http-api
+  namespace: actual-budget
+  labels:
+    app: actual-http-api
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: actual-http-api
+  template:
+    metadata:
+      labels:
+        app: actual-http-api
+    spec:
+      containers:
+        - name: actual-http-api
+          image: jhonderson/actual-http-api:26.7.0@sha256:7bb545a83456660dda1484f7f1197e1c0a4c1066ede3b7d924cd2e1eabbdbd73
+          ports:
+            - containerPort: 5007
+              name: http
+          env:
+            - name: PORT
+              value: "5007"
+            - name: NODE_ENV
+              value: "production"
+            - name: ACTUAL_SERVER_URL
+              value: "http://actual-budget.actual-budget.svc.cluster.local:5006/"
+            - name: ACTUAL_DATA_DIR
+              value: "/data"
+            - name: SWAGGER_PROTOCOL
+              value: "https"
+            - name: SWAGGER_HOST
+              value: "ab-api.pleasedontdmca.me"
+            - name: SWAGGER_PORT
+              value: "443"
+            - name: TZ
+              value: "America/Anchorage"
+          envFrom:
+            - secretRef:
+                name: actual-budget-api-env
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          livenessProbe:
+            tcpSocket:
+              port: 5007
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            tcpSocket:
+              port: 5007
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+            requests:
+              memory: "128Mi"
+              cpu: "50m"
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: actual-budget-api-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: actual-http-api
+  namespace: actual-budget
+spec:
+  selector:
+    app: actual-http-api
+  ports:
+    - port: 5007
+      targetPort: 5007
+      nodePort: 30508
+      name: http
+  type: NodePort
