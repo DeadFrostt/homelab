@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: couchdb
-          image: couchdb:3.5.1@sha256:f931b65dd7406c03e1c83ffc7c04b6d551dc18df1ce8581a04f17cdffcb20e23
+          image: couchdb:3.5.2@sha256:7feb744b60195233219f3fa801cbc2384efa24b28c76a5d1f3e93efe6557f921
           ports:
             - containerPort: 5984
               name: http
