@@ -5,7 +5,7 @@ resources:
 helmCharts:
   - name: secrets-operator
     repo: https://dl.cloudsmith.io/public/infisical/helm-charts/helm/charts/
-    version: 0.11.4
+    version: 0.11.5
     releaseName: infisical-operator
     namespace: infisical-operator
     includeCRDs: true
