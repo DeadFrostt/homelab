@@ -4,7 +4,10 @@ metadata:
   name: netdata
   namespace: netdata
 spec:
-  replicas: 1
+  # Disabled: the host-privileged agent saturated Yeager storage (~97.5 MB/s)
+  # and caused k3s control-plane timeouts on 2026-07-23. Do not re-enable
+  # without first isolating the offending collector(s).
+  replicas: 0
   selector:
     matchLabels:
       app: netdata
