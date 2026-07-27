@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: rac
-          image: ghcr.io/goauthentik/rac:2026.5.5@sha256:7ccd6c5e45eb3ae45e7d7392bd25899c4d1ff601f6d630bfab7528236328aba7
+          image: ghcr.io/goauthentik/rac:2026.5.6@sha256:a11474a8205eb87d936dd4de182ba4373aed3de167eb81a46b097f2c08a11db3
           ports:
             - containerPort: 4822
               name: guacd
