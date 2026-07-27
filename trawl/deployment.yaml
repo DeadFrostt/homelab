@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
         - name: trawl
-          image: ghcr.io/germondai/trawl:latest@sha256:745903d3cb09da4e355a8c09ad7e014e84ac6219609417d66d9616c4707d501d
+          image: ghcr.io/germondai/trawl:latest@sha256:728216a6a5e9654e3235bfa614c71e3847fe5826d3032fa2bca8083719ab355e
           ports:
             - containerPort: 8191
               name: http
