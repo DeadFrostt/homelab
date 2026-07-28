@@ -13,6 +13,10 @@ spec:
       labels:
         app: cloudflared
     spec:
+      # Tunnel origins are hosted on Yeager's LAN address (10.0.0.48).
+      # Host networking must therefore run on Yeager, not another cluster node.
+      nodeSelector:
+        kubernetes.io/hostname: yeager
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
       containers:
