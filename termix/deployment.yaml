@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: termix
-          image: ghcr.io/lukegus/termix:latest@sha256:4d3371311087d6757aa9d1c94117e854d749b1c5e8fd07bd36e7a99e0686d26c
+          image: ghcr.io/lukegus/termix:latest@sha256:e4b579f1ee3e40ca850a5f8e91ae3bd44f28aa6377d56b11b2ee7e555e071173
           ports:
             - containerPort: 8080
               name: http
