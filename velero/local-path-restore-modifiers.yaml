@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: velero-local-path-restore-modifiers
+  namespace: velero
+data:
+  resource-modifiers.yaml: |
+    version: v1
+    resourceModifierRules:
+      - conditions:
+          groupResource: persistentvolumeclaims
+          matches:
+            - path: /spec/storageClassName
+              value: local-path
+        mergePatches:
+          - patchData: |
+              spec:
+                volumeName: null
+              metadata:
+                annotations:
+                  pv.kubernetes.io/bind-completed: null
+                  pv.kubernetes.io/bound-by-controller: null
+                  volume.kubernetes.io/selected-node: null

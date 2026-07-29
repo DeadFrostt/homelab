@@ -1,0 +1,15 @@
+# Create with: kubectl create -f restore-template.yaml
+# Replace BACKUP_NAME before creating. The modifier is required for local-path PVCs:
+# it removes the former PV binding so Kubernetes provisions a new PV before Kopia restores data.
+apiVersion: velero.io/v1
+kind: Restore
+metadata:
+  generateName: restore-
+  namespace: velero
+spec:
+  backupName: BACKUP_NAME
+  includeClusterResources: false
+  restorePVs: true
+  resourceModifier:
+    kind: ConfigMap
+    name: velero-local-path-restore-modifiers
