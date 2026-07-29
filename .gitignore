@@ -29,6 +29,9 @@ kubeconfig.*
 *.kubeconfig
 auth.json
 
+# Generated/local documentation
+README.md
+
 # OS / editor noise
 .DS_Store
 .idea/
