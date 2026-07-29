@@ -4,6 +4,7 @@ namespace: velero
 resources:
   - namespace.yaml
   - infisical-secret.yaml
+  - local-path-restore-modifiers.yaml
   - discord-notifier.yaml
 helmCharts:
   - name: velero
