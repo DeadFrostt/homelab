@@ -26,8 +26,25 @@ spec:
             - sh
             - -c
             - |
-              apk add --no-cache gettext >/dev/null
-              envsubst < /tmp/tmpl/turnserver.conf.tmpl > /etc/coturn/turnserver.conf
+              set -eu
+
+              escape_sed_replacement() {
+                printf '%s' "$1" | sed 's/[\\&|]/\\&/g'
+              }
+
+              turn_realm=$(escape_sed_replacement "$TURN_REALM")
+              turn_server_name=$(escape_sed_replacement "$TURN_SERVER_NAME")
+              coturn_auth_secret=$(escape_sed_replacement "$COTURN_AUTH_SECRET")
+              turn_external_ip=$(escape_sed_replacement "$TURN_EXTERNAL_IP")
+              turn_relay_ip=$(escape_sed_replacement "$TURN_RELAY_IP")
+
+              sed \
+                -e "s|\${TURN_REALM}|${turn_realm}|g" \
+                -e "s|\${TURN_SERVER_NAME}|${turn_server_name}|g" \
+                -e "s|\${COTURN_AUTH_SECRET}|${coturn_auth_secret}|g" \
+                -e "s|\${TURN_EXTERNAL_IP}|${turn_external_ip}|g" \
+                -e "s|\${TURN_RELAY_IP}|${turn_relay_ip}|g" \
+                /tmp/tmpl/turnserver.conf.tmpl > /etc/coturn/turnserver.conf
           env:
             - name: COTURN_AUTH_SECRET
               valueFrom:
