@@ -8,7 +8,10 @@ metadata:
 spec:
   replicas: 1
   strategy:
-    type: Recreate
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app: cobalt-primary
@@ -17,52 +20,14 @@ spec:
       labels:
         app: cobalt-primary
     spec:
-      securityContext:
-        sysctls:
-          - name: net.ipv4.ip_forward
-            value: "1"
-      serviceAccountName: tailscale
+      nodeSelector:
+        homelab.dev/node-class: edge
+      tolerations:
+        - key: homelab.dev/edge
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
       containers:
-        - name: tailscale
-          image: tailscale/tailscale:latest@sha256:321ce041508c19079b57a28b6666c8d81ab0b08accc0a2585b3ab663d557ac24
-          securityContext:
-            capabilities:
-              add:
-                - NET_ADMIN
-                - SYS_MODULE
-          env:
-            - name: TS_EXTRA_ARGS
-              valueFrom:
-                configMapKeyRef:
-                  name: cobalt-tailscale-config
-                  key: TS_EXTRA_ARGS
-            - name: TS_STATE_DIR
-              value: /var/lib/tailscale
-            - name: TS_AUTHKEY
-              valueFrom:
-                secretKeyRef:
-                  name: cobalt-env
-                  key: TS_AUTHKEY
-            - name: POD_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.name
-            - name: POD_UID
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.uid
-          volumeMounts:
-            - name: tailscale-state
-              mountPath: /var/lib/tailscale
-            - name: dev-net-tun
-              mountPath: /dev/net/tun
-          resources:
-            limits:
-              memory: "128Mi"
-              cpu: "500m"
-            requests:
-              memory: "64Mi"
-              cpu: "50m"
         - name: cobalt-api
           image: ghcr.io/zimpatrick/cobalt:staging@sha256:a4357be1523b1c2823873c53db0270c67e6f71856c4eaf22f8d62205da372bb8
           env:
@@ -105,13 +70,6 @@ spec:
               memory: "256Mi"
               cpu: "50m"
       volumes:
-        - name: tailscale-state
-          persistentVolumeClaim:
-            claimName: tailscale-state
-        - name: dev-net-tun
-          hostPath:
-            path: /dev/net/tun
-            type: CharDevice
         - name: cobalt-files
           secret:
             secretName: cobalt-files
