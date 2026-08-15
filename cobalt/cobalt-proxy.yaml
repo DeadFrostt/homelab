@@ -6,7 +6,12 @@ metadata:
   labels:
     app: cobalt-proxy
 spec:
-  replicas: 1
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   selector:
     matchLabels:
       app: cobalt-proxy
@@ -15,6 +20,32 @@ spec:
       labels:
         app: cobalt-proxy
     spec:
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: homelab.dev/node-class
+                    operator: In
+                    values:
+                      - edge
+            - weight: 50
+              preference:
+                matchExpressions:
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: Exists
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: cobalt-proxy
+              topologyKey: kubernetes.io/hostname
+      tolerations:
+        - key: homelab.dev/edge
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
       containers:
         - name: haproxy
           image: haproxy:3.4-alpine@sha256:fb87fc81943143b9acaea7442973e6ba654035fff76ffe7af6829dd1bcb0f7a5
@@ -62,3 +93,14 @@ spec:
       nodePort: 30009
       name: proxy
   type: NodePort
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: cobalt-proxy
+  namespace: cobalt
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: cobalt-proxy
