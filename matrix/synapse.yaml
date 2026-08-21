@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: synapse
-          image: matrixdotorg/synapse:latest@sha256:39f47bcea65c544ef3a6d58848ee98e2ea98387e9991df30474d25b54477a0af
+          image: matrixdotorg/synapse:latest@sha256:18db676dd9f1a053edcf3033a78daeff035b773d58e5bc68802e379947332302
           ports:
             - containerPort: 8008
               name: client
