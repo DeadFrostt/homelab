@@ -12,6 +12,7 @@ resources:
   - cnpg-scheduledbackup.yaml
   - pvc.yaml
   - server.yaml
+  - pdb.yaml
   - worker.yaml
   - rac.yaml
   - limitrange.yaml
