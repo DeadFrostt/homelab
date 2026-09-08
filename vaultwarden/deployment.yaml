@@ -49,6 +49,8 @@ spec:
               value: "false"
             - name: TZ
               value: "America/Anchorage"
+            - name: SSO_CLIENT_CACHE_EXPIRATION
+              value: "3600"
             - name: LOG_LEVEL
               value: "warn"
             - name: SMTP_PORT
