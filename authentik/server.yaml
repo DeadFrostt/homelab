@@ -20,6 +20,11 @@ spec:
       annotations:
         backup.velero.io/backup-volumes-excludes: templates
     spec:
+      dnsConfig:
+        options:
+          - name: ndots
+            value: "1"
+          - name: use-vc
       containers:
         - name: server
           image: ghcr.io/goauthentik/server:2026.8.1@sha256:9d605ed569ff9f39146be39da93714b2acf19072acc4ab0f0e2f2d81be88cdce
