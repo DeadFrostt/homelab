@@ -50,6 +50,10 @@ spec:
               value: "false"
             - name: TZ
               value: "America/Anchorage"
+            - name: SSO_AUTH_ONLY_NOT_SESSION
+              value: "true"
+            - name: SSO_SCOPES
+              value: "email profile"
             - name: SSO_CLIENT_CACHE_EXPIRATION
               value: "3600"
             - name: LOG_LEVEL
