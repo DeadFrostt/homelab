@@ -67,7 +67,7 @@ nodeAgent:
 schedules:
   daily-cluster:
     disabled: false
-    paused: true
+    paused: false
     schedule: "23 8 * * *"
     useOwnerReferencesInBackup: false
     template:
