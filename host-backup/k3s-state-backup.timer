@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily encrypted K3s SQLite datastore backup
+
+[Timer]
+OnCalendar=*-*-* 02:10:00 America/Chicago
+RandomizedDelaySec=10m
+Persistent=true
+Unit=k3s-state-backup.service
+
+[Install]
+WantedBy=timers.target

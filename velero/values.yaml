@@ -11,10 +11,23 @@ credentials:
   existingSecret: velero-cloud-credentials
 
 configuration:
-  defaultBackupStorageLocation: default
+  defaultBackupStorageLocation: v2
   defaultVolumesToFsBackup: false
   backupStorageLocation:
     - name: default
+      provider: aws
+      bucket: k3s-backups-yeager
+      default: false
+      accessMode: ReadOnly
+      credential:
+        name: velero-cloud-credentials
+        key: cloud
+      config:
+        region: us-east-005
+        s3ForcePathStyle: "true"
+        s3Url: https://s3.us-east-005.backblazeb2.com
+        checksumAlgorithm: ""
+    - name: v2
       provider: aws
       bucket: k3s-backups-yeager
       default: true
@@ -26,6 +39,8 @@ configuration:
         region: us-east-005
         s3ForcePathStyle: "true"
         s3Url: https://s3.us-east-005.backblazeb2.com
+        prefix: velero-v2
+        checksumAlgorithm: ""
   volumeSnapshotLocation: []
 
 snapshotsEnabled: false
@@ -56,7 +71,7 @@ schedules:
     useOwnerReferencesInBackup: false
     template:
       ttl: "336h"
-      storageLocation: default
+      storageLocation: v2
       includedNamespaces:
         - "*"
       excludedNamespaces:

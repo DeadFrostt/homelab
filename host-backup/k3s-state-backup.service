@@ -1,0 +1,15 @@
+[Unit]
+Description=Encrypted K3s SQLite datastore backup
+Documentation=file:/home/ubuntu/kube-stack/host-backup/README.md
+Requires=k3s.service
+After=k3s.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/k3s-state-backup
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=1h
+PrivateTmp=true
+NoNewPrivileges=true

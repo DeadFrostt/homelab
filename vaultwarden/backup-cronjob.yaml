@@ -1,0 +1,45 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: vaultwarden-database-backup
+  namespace: vaultwarden
+spec:
+  schedule: "0 2 * * *"
+  timeZone: America/Chicago
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 3600
+      template:
+        metadata:
+          labels:
+            app: vaultwarden-database-backup
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: backup
+              image: vaultwarden/server:latest@sha256:094b5689ed81549bd293418395c7cf495ae9d960fc2d4928cef2083ef913d912
+              command:
+                - /bin/sh
+                - -ec
+              args:
+                - |
+                  /vaultwarden backup
+                  find /data -maxdepth 1 -type f -name 'db_*.sqlite3' -mtime +14 -delete
+              volumeMounts:
+                - name: data
+                  mountPath: /data
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  cpu: 250m
+                  memory: 128Mi
+          volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: vaultwarden-data

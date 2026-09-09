@@ -7,4 +7,5 @@ resources:
   - infisical-secret.yaml
   - pvc.yaml
   - deployment.yaml
+  - backup-cronjob.yaml
   - limitrange.yaml
