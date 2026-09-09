@@ -30,6 +30,7 @@ configuration:
     - name: v2
       provider: aws
       bucket: k3s-backups-yeager
+      prefix: velero-v2
       default: true
       accessMode: ReadWrite
       credential:
@@ -39,7 +40,6 @@ configuration:
         region: us-east-005
         s3ForcePathStyle: "true"
         s3Url: https://s3.us-east-005.backblazeb2.com
-        prefix: velero-v2
         checksumAlgorithm: ""
   volumeSnapshotLocation: []
 
