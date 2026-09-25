@@ -28,7 +28,15 @@ spec:
               from pathlib import Path
 
               template = Path("/config/homeserver.yaml.tmpl").read_text()
-              rendered = os.path.expandvars(template)
+
+              def substitute(match):
+                  key = match.group(1)
+                  value = os.environ.get(key)
+                  if value is None:
+                      return match.group(0)
+                  return value.rstrip("\r\n")
+
+              rendered = re.sub(r"\$\{([A-Z0-9_]+)\}", substitute, template)
               missing = sorted(set(re.findall(r"\$\{[A-Z0-9_]+\}", rendered)))
               if missing:
                   raise SystemExit(f"Unresolved configuration variables: {', '.join(missing)}")
