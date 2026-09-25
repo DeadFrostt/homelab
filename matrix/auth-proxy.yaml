@@ -8,16 +8,19 @@ data:
     server {
       listen 8080;
       location ~ ^/_matrix/client/[^/]+/(login|logout|refresh) {
+        proxy_http_version 1.1;
         proxy_pass http://mas.mas.svc.cluster.local:8080;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
       }
       location / {
+        proxy_http_version 1.1;
         proxy_pass http://synapse:8008;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        client_max_body_size 50M;
       }
     }
 ---
@@ -38,7 +41,7 @@ spec:
     spec:
       containers:
         - name: nginx
-          image: nginx:1.27-alpine
+          image: nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
           ports:
             - name: http
               containerPort: 8080

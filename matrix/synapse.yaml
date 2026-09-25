@@ -4,7 +4,10 @@ metadata:
   name: synapse
   namespace: matrix
 spec:
-  replicas: 1
+  replicas: 0
+  strategy:
+    type: Recreate
+    rollingUpdate: null
   selector:
     matchLabels:
       app: synapse
@@ -13,6 +16,35 @@ spec:
       labels:
         app: synapse
     spec:
+      initContainers:
+        - name: render-config
+          image: matrixdotorg/synapse:latest@sha256:7155ddc4835e5b8afa4e1598d92aa16ff1d03109f7d1cff61d493237d1210b1d
+          command:
+            - python
+            - -c
+            - |
+              import os
+              import re
+              from pathlib import Path
+
+              template = Path("/config/homeserver.yaml.tmpl").read_text()
+              rendered = os.path.expandvars(template)
+              missing = sorted(set(re.findall(r"\$\{[A-Z0-9_]+\}", rendered)))
+              if missing:
+                  raise SystemExit(f"Unresolved configuration variables: {', '.join(missing)}")
+              temporary = Path("/data/homeserver.yaml.tmp")
+              temporary.write_text(rendered)
+              temporary.chmod(0o600)
+              temporary.replace("/data/homeserver.yaml")
+          envFrom:
+            - secretRef:
+                name: matrix-env
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+            - name: data
+              mountPath: /data
       containers:
         - name: synapse
           image: matrixdotorg/synapse:latest@sha256:7155ddc4835e5b8afa4e1598d92aa16ff1d03109f7d1cff61d493237d1210b1d
@@ -42,6 +74,9 @@ spec:
               memory: "512Mi"
               cpu: "100m"
       volumes:
+        - name: config
+          configMap:
+            name: synapse-config
         - name: data
           persistentVolumeClaim:
             claimName: matrix-synapse

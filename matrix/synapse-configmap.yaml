@@ -1,0 +1,90 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: synapse-config
+  namespace: matrix
+data:
+  homeserver.yaml.tmpl: |
+    server_name: "pleasedontdmca.me"
+    public_baseurl: https://matrix.pleasedontdmca.me
+    serve_server_wellknown: true
+    default_identity_server: https://vector.im
+    pid_file: /data/homeserver.pid
+
+    listeners:
+      - port: 8008
+        resources:
+          - compress: false
+            names:
+              - client
+              - federation
+        tls: false
+        type: http
+        x_forwarded: true
+
+    database:
+      name: psycopg2
+      args:
+        user: synapse
+        password: "${SYNAPSE_POSTGRES_PASSWORD}"
+        database: synapse
+        host: matrix-pg-rw
+        cp_min: 5
+        cp_max: 10
+
+    log_config: "/data/pleasedontdmca.me.log.config"
+    enable_registration: false
+    enable_registration_without_verification: false
+    media_store_path: /data/media_store
+    registration_shared_secret: "${SYNAPSE_REGISTRATION_SHARED_SECRET}"
+    report_stats: false
+    macaroon_secret_key: "${SYNAPSE_MACAROON_SECRET_KEY}"
+    form_secret: "${SYNAPSE_FORM_SECRET}"
+    signing_key_path: "/data/pleasedontdmca.me.signing.key"
+    trusted_key_servers:
+      - server_name: "matrix.org"
+    suppress_key_server_warning: true
+
+    push:
+      enabled: true
+
+    turn_uris:
+      - "turn:turn.pleasedontdmca.me:3478?transport=udp"
+      - "turn:turn.pleasedontdmca.me:3478?transport=tcp"
+      - "turns:turn.pleasedontdmca.me:5349?transport=tcp"
+    turn_shared_secret: "${SYNAPSE_TURN_SHARED_SECRET}"
+    turn_user_lifetime: 86400000
+    turn_allow_guests: false
+
+    extra_well_known_client_content:
+      io.element.call:
+        widget_url: "https://call.element.io"
+      org.matrix.msc4143.rtc_foci:
+        - type: livekit
+          livekit_service_url: https://matrixrtc.pleasedontdmca.me/livekit/jwt
+      org.matrix.msc3819.allow_ip_literals: false
+
+    matrix_rtc:
+      transports:
+        - type: livekit
+          livekit_service_url: https://matrixrtc.pleasedontdmca.me/livekit/jwt
+
+    experimental_features:
+      msc3266_enabled: true
+      msc4143_enabled: true
+      msc4222_enabled: true
+      msc4140_enabled: true
+
+    max_event_delay_duration: 24h
+
+    rc_message:
+      per_second: 0.5
+      burst_count: 30
+    rc_delayed_event_mgmt:
+      per_second: 1
+      burst_count: 20
+
+    matrix_authentication_service:
+      enabled: true
+      endpoint: http://mas.mas.svc.cluster.local:8080/
+      secret: "${SYNAPSE_MAS_SHARED_SECRET}"
