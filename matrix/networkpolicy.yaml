@@ -77,6 +77,9 @@ spec:
         - podSelector:
             matchLabels:
               app: synapse-admin
+        - podSelector:
+            matchLabels:
+              app: matrix-auth-proxy
       ports:
         - protocol: TCP
           port: 8008
