@@ -34,7 +34,9 @@ spec:
                   raise SystemExit(f"Unresolved configuration variables: {', '.join(missing)}")
               temporary = Path("/data/homeserver.yaml.tmp")
               temporary.write_text(rendered)
-              temporary.chmod(0o600)
+              # The Synapse image drops privileges before reading this file.
+              # Keep the rendered config readable by that runtime user.
+              temporary.chmod(0o644)
               temporary.replace("/data/homeserver.yaml")
           envFrom:
             - secretRef:
