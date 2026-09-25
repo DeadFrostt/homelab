@@ -4,6 +4,7 @@ namespace: matrix
 resources:
   - namespace.yaml
   - networkpolicy.yaml
+  - auth-proxy-networkpolicy.yaml
   - cnpg-networkpolicy.yaml
   - infisical-secret.yaml
   - cnpg-app-secret.yaml
