@@ -1,70 +1,82 @@
-apiVersion: v1
-kind: Namespace
+apiVersion: apps/v1
+kind: Deployment
 metadata:
   name: mas
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: postgres
+  namespace: mas
 spec:
-  replicas: 1
+  replicas: 0
+  revisionHistoryLimit: 3
+  strategy:
+    type: Recreate
   selector:
-    matchLabels: {app: mas-postgres}
+    matchLabels:
+      app: mas
   template:
     metadata:
-      labels: {app: mas-postgres}
-    spec:
-      containers:
-        - name: postgres
-          image: postgres:16-alpine
-          env:
-            - {name: POSTGRES_DB, value: mas}
-            - {name: POSTGRES_USER, value: mas}
-            - name: POSTGRES_PASSWORD
-              valueFrom: {secretKeyRef: {name: mas-secrets, key: db-password}}
-          ports: [{containerPort: 5432}]
-          readinessProbe: {exec: {command: [sh, -c, 'pg_isready -U mas -d mas']}, initialDelaySeconds: 5}
-          resources: {requests: {cpu: 25m, memory: 64Mi}, limits: {cpu: 250m, memory: 256Mi}}
----
-apiVersion: v1
-kind: Service
-metadata: {name: postgres}
-spec:
-  selector: {app: mas-postgres}
-  ports: [{name: postgres, port: 5432, targetPort: 5432}]
----
-apiVersion: apps/v1
-kind: Deployment
-metadata: {name: mas}
-spec:
-  replicas: 1
-  selector:
-    matchLabels: {app: mas}
-  template:
-    metadata:
-      labels: {app: mas}
+      labels:
+        app: mas
     spec:
       containers:
         - name: mas
-          image: ghcr.io/element-hq/matrix-authentication-service:latest
-          args: [server, --config, /config/config.yaml]
-          ports: [{name: http, containerPort: 8080}]
+          image: ghcr.io/element-hq/matrix-authentication-service:latest@sha256:54f03be8ef26b9a6f2ab594d2a4c6e8074c3c09fbe05890a00ea50939d3e152a
+          args:
+            - server
+            - --config
+            - /config/config.yaml
+          ports:
+            - name: http
+              containerPort: 8080
           volumeMounts:
-            - {name: config, mountPath: /config, readOnly: true}
-            - {name: secrets, mountPath: /secrets, readOnly: true}
-          readinessProbe: {httpGet: {path: /health, port: http}, initialDelaySeconds: 10, periodSeconds: 10}
-          livenessProbe: {httpGet: {path: /health, port: http}, initialDelaySeconds: 30, periodSeconds: 20}
-          resources: {requests: {cpu: 50m, memory: 128Mi}, limits: {cpu: 500m, memory: 512Mi}}
+            - name: config
+              mountPath: /config
+              readOnly: true
+            - name: secrets
+              mountPath: /secrets
+              readOnly: true
+            - name: database-secret
+              mountPath: /database-secret
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
       volumes:
         - name: config
-          configMap: {name: mas-config}
+          configMap:
+            name: mas-config
         - name: secrets
-          secret: {secretName: mas-secrets}
+          secret:
+            secretName: mas-secrets
+        - name: database-secret
+          secret:
+            secretName: mas-pg-app
 ---
 apiVersion: v1
 kind: Service
-metadata: {name: mas}
+metadata:
+  name: mas
+  namespace: mas
 spec:
-  selector: {app: mas}
-  ports: [{name: http, port: 8080, targetPort: http}]
+  selector:
+    app: mas
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

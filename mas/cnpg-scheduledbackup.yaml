@@ -1,0 +1,12 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: mas-pg-daily
+  namespace: mas
+spec:
+  schedule: "0 30 3 * * *"
+  immediate: true
+  backupOwnerReference: self
+  cluster:
+    name: mas-pg
+  method: barmanObjectStore

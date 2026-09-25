@@ -1,0 +1,61 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: mas-pg
+  namespace: mas
+spec:
+  inheritedMetadata:
+    annotations:
+      backup.velero.io/backup-volumes-excludes: pgdata
+  instances: 1
+  imageName: ghcr.io/cloudnative-pg/postgresql:16.6
+  primaryUpdateStrategy: unsupervised
+
+  bootstrap:
+    initdb:
+      database: mas
+      owner: mas
+      secret:
+        name: mas-pg-app
+
+  affinity:
+    nodeSelector:
+      kubernetes.io/hostname: yeager
+
+  storage:
+    size: 5Gi
+    storageClass: local-path
+
+  resources:
+    requests:
+      memory: 128Mi
+      cpu: 50m
+    limits:
+      memory: 512Mi
+      cpu: 500m
+
+  monitoring:
+    enablePodMonitor: false
+
+  postgresql:
+    parameters:
+      max_connections: "100"
+      shared_buffers: "128MB"
+
+  backup:
+    retentionPolicy: "14d"
+    barmanObjectStore:
+      serverName: mas-pg-v1
+      destinationPath: "s3://k3s-backups-yeager/cnpg/mas"
+      endpointURL: "https://s3.us-east-005.backblazeb2.com"
+      s3Credentials:
+        accessKeyId:
+          name: cnpg-b2-credentials
+          key: AWS_ACCESS_KEY_ID
+        secretAccessKey:
+          name: cnpg-b2-credentials
+          key: AWS_SECRET_ACCESS_KEY
+      wal:
+        compression: gzip
+      data:
+        compression: gzip
