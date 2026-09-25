@@ -12,6 +12,7 @@ resources:
   - cnpg-scheduledbackup.yaml
   - pvc.yaml
   - synapse.yaml
+  - auth-proxy.yaml
   - element-configmap.yaml
   - element.yaml
   - synapse-admin.yaml
