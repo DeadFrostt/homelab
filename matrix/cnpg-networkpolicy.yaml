@@ -14,12 +14,6 @@ spec:
         - podSelector:
             matchLabels:
               app: synapse
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: mas
-          podSelector:
-            matchLabels:
-              app: mas
       ports:
         - protocol: TCP
           port: 5432
