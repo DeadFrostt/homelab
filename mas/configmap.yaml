@@ -63,7 +63,7 @@ data:
           claims_imports:
             localpart:
               action: require
-              template: "{{ user.preferred_username }}"
+              template: "{{ user.preferred_username.lower() }}"
             displayname:
               action: force
               template: "{{ user.name }}"
