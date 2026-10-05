@@ -17,7 +17,7 @@ spec:
     spec: 
       containers:
         - name: gatus
-          image: ghcr.io/twin/gatus:stable@sha256:c5f210d095fa78e6efaa20ffeb14803f2ba4f10615e16a6d12087697149617f0
+          image: ghcr.io/twin/gatus:stable@sha256:094eb186e55235db367e90e9d56140e5897b7044c41de23cde4cc18e6da1242e
           ports:
             - containerPort: 8080
               name: http
