@@ -160,6 +160,13 @@ also requires its Redis StatefulSet. Authentik's worker remains stopped during
 initial validation. Gatus's pilot config has no alert destination. Use the
 provided rejection and PostgreSQL drill scripts for repeatable checks.
 
+`test-actual-budget.py` validates a restored session, compares an existing
+budget sync-file download with its restored stored bytes, and creates, updates,
+reads and tombstones a synthetic sync file through the normal authenticated API.
+It keeps tokens in memory and prints only results/counts. This proves sync
+storage and restored-session access; it does not prove a fresh OIDC login,
+client-side budget transaction editing or end-to-end budget decryption.
+
 ## Manual promotion and failback gates
 
 Public promotion is not enabled. A backup-health HTTP 200 does not mean these
