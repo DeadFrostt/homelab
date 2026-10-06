@@ -52,11 +52,12 @@ records the new tunnel and DNS identifiers.
 
 The supplied management token covers DNS for `pleasedontdmca.me`. Existing
 Vaultwarden (`vault.deadfrost.dev`) and the notes tunnel
-(`couch.deadfrost.dev`) need separate `deadfrost.dev` DNS control. Verify which
-notes dataset/client endpoint is authoritative before promotion: the existing
-notes tunnel points to a home Docker service, while this recovery set restores
-the Kubernetes CouchDB dataset. The health canary does not authorize or execute
-production routing changes.
+(`couch.deadfrost.dev`) need separate `deadfrost.dev` DNS control. The notes tunnel connector currently runs on Ackermann inside
+the primary Kubernetes cluster, but its `obsidian-livesync` service and storage
+run on Yeager. A healthy connector alone therefore does not establish notes
+availability after Yeager fails. The restored CouchDB dataset corresponds to
+that service. The health canary does not authorize or execute production
+routing changes.
 
 ## Backup and custody
 
