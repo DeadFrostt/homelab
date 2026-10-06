@@ -16,6 +16,32 @@ def now(): return dt.datetime.now(dt.timezone.utc).isoformat()
 def run(args, **kwargs):
     env = dict(os.environ); env.pop('JOURNAL_STREAM', None)
     return subprocess.run(args, env=env, check=True, **kwargs)
+def verify_uploaded_snapshot(snapshot, remote, config):
+    """Require native object hashes for every payload, without downloading it.
+
+    B2 validates SHA-1 on upload. The recovery mirror independently downloads
+    and checks signed SHA-256 and decryption. Missing native hashes fail closed.
+    """
+    snapshot=Path(snapshot)
+    run(['sha256sum','--check','--status','SHA256SUMS'],cwd=snapshot,capture_output=True)
+    expected={}
+    for path in snapshot.rglob('*'):
+        if path.is_file():
+            with path.open('rb') as stream:digest=hashlib.file_digest(stream,'sha1').hexdigest()
+            expected[str(path.relative_to(snapshot))]=(path.stat().st_size,digest)
+    listing=json.loads(run(['rclone','--config',config,'lsjson',remote,'--recursive','--hash'],capture_output=True,timeout=120).stdout)
+    actual={}
+    for item in listing:
+        if item['IsDir']:continue
+        name=item['Path']
+        if name in actual:raise ValueError('Duplicate offsite object')
+        hashes={key.lower().replace('-',''):value.lower() for key,value in item.get('Hashes',{}).items()}
+        digest=hashes.get('sha1','')
+        if len(digest)!=40 or any(c not in '0123456789abcdef' for c in digest):
+            raise ValueError('Offsite object has no usable native SHA-1: '+name)
+        actual[name]=(item['Size'],digest)
+    if not expected or actual!=expected:raise ValueError('Offsite object inventory/hash mismatch; retention refused')
+
 def kube(*args):
     return ['kubectl', '--kubeconfig', os.environ.get('BACKUP_KUBECONFIG', '/home/ubuntu/.kube/config'), *args]
 def get(*args): return json.loads(run(kube(*args, '-o', 'json'), capture_output=True).stdout)
@@ -176,11 +202,8 @@ def create_snapshot(root, recipient, remote=None, local_only=False):
             if not remote: raise ValueError('Offsite destination is required')
             dest=remote.rstrip('/')+'/portable/'+site+'/'+stamp
             run(['env','-u','JOURNAL_STREAM','rclone','--config',os.environ.get('BACKUP_RCLONE_CONFIG','/home/ubuntu/.config/rclone/rclone.conf'),'copy',str(final),dest,'--transfers','2','--checkers','2'],timeout=600)
-            run(['bash','-c','source "$1"; verify_remote_snapshot "$2" "$3" --config "$4"','verify',str(Path(__file__).with_name('backup-verify.sh')),str(final),dest,os.environ.get('BACKUP_RCLONE_CONFIG','/home/ubuntu/.config/rclone/rclone.conf')],timeout=1900)
-            for artifact in ['SHA256SUMS','SHA256SUMS.sig']:
-                downloaded=run(['rclone','--config',os.environ.get('BACKUP_RCLONE_CONFIG','/home/ubuntu/.config/rclone/rclone.conf'),'cat',dest+'/'+artifact],capture_output=True,timeout=60).stdout
-                if downloaded!=(final/artifact).read_bytes(): raise ValueError('Offsite signed manifest differs; retention refused')
-            marker={'snapshot':stamp,'verified_utc':now(),'remote':dest}
+            verify_uploaded_snapshot(final,dest,os.environ.get('BACKUP_RCLONE_CONFIG','/home/ubuntu/.config/rclone/rclone.conf'))
+            marker={'snapshot':stamp,'verified_utc':now(),'remote':dest,'verification':'b2-native-sha1'}
             m=root/'.last-verified.tmp';m.write_text(json.dumps(marker)+'\n');m.replace(root/'.last-verified.json')
             budget=int(os.environ.get('DR_CACHE_BUDGET_GIB','20'))*1024**3
             for old in retention_plan(root,limit_bytes=budget):

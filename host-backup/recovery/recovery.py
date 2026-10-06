@@ -71,7 +71,7 @@ def mirror():
                 temp=CACHE/('.'+stamp+'.incomplete')
                 if temp.exists(): shutil.rmtree(temp)
                 temp.mkdir(mode=0o700)
-                run(base+['copy',config['remote']+'/'+stamp,str(temp),'--transfers','2','--max-transfer','2G','--cutoff-mode','cautious'],timeout=600)
+                run(base+['copy',config['remote']+'/'+stamp,str(temp),'--transfers','2','--max-transfer','2G','--cutoff-mode','cautious','--retries','1','--low-level-retries','1'],timeout=600,capture_output=True)
                 # Verification uses the signed timestamp, so rename only within
                 # a private staging parent before validation.
                 staging=CACHE/('.stage-'+stamp); staging.mkdir(mode=0o700,exist_ok=True)
@@ -88,6 +88,8 @@ def mirror():
             (final/'.verified.json').write_text(json.dumps(marker)+'\n')
             if complete and priority: break
         except (ValueError,subprocess.CalledProcessError,FileNotFoundError,KeyError) as error:
+            if isinstance(error,subprocess.CalledProcessError) and b'download_cap_exceeded' in (error.stderr or b''):
+                raise ValueError('Backblaze download cap reached; cached sets retained, download attempts stopped') from error
             print('Rejected recovery set '+stamp+': '+type(error).__name__,flush=True)
     if not priority: raise ValueError('No fresh verified priority recovery set')
     for old in retention_plan(CACHE,limit_bytes=6*1024**3): shutil.rmtree(old)
