@@ -19,8 +19,45 @@ curl -fsS http://127.0.0.1:9387/health
 
 The guest uses static 10.67.46.10/24 on the existing LXD NAT bridge; the host's
 firewall was not changed. VM autostart and the guest systemd services persist.
+The LXD NIC also reserves 10.67.46.10 for this VM to prevent future DHCP conflicts.
 The freshness endpoint listens on guest port 9387 and reports backup readiness
 separately from promotion readiness. It has no credentials in its responses.
+The notification-free Gatus pilot watches this endpoint and the primary's
+public Authentik health URL independently of the primary cluster API.
+
+## Independent Cloudflare path
+
+The separate remotely managed `ackermann-dr` tunnel serves only
+`https://dr-check.pleasedontdmca.me/health`, backed by the guest's local
+freshness endpoint. Other paths return 404. This endpoint exposes no database,
+application content or credentials. Existing production DNS records and tunnels
+are unchanged. Public HTTP 200 was verified from Yeager and the home VM, and
+again after restarting the tunnel service.
+
+Install the verified AMD64 Cloudflare binary as `/usr/local/bin/cloudflared`
+and `cloudflared.service` as `homelab-dr-cloudflared.service`. The tested binary
+is 2026.10.0; SHA256 is
+`d33ff2d14475178d2012c2c56beba87389ac5ded27649519f198a7d3134a99db`.
+The root-only `/etc/homelab-dr/cloudflared-runtime-token` belongs to this tunnel
+alone. Systemd passes it with `LoadCredential` to a dynamic service user; the
+API management token is not installed in the VM. The service is enabled at
+boot and does not rely on the primary cluster, secrets operator or GitOps.
+Revoking the temporary management token does not revoke this runtime token.
+
+Routing inventory and unchanged baseline configurations are held in Yeager's
+root-only `/etc/homelab-dr/cloudflare-*-baseline.json` and
+`cloudflare-config-*.json`. Copy the required non-secret inventory to independent
+owner custody before relying on it during an outage. `home-tunnel-created.json`
+records the new tunnel and DNS identifiers.
+
+The supplied management token covers DNS for `pleasedontdmca.me`. Existing
+Vaultwarden (`vault.deadfrost.dev`) and the notes tunnel
+(`couch.deadfrost.dev`) need separate `deadfrost.dev` DNS control. The notes tunnel connector currently runs on Ackermann inside
+the primary Kubernetes cluster, but its `obsidian-livesync` service and storage
+run on Yeager. A healthy connector alone therefore does not establish notes
+availability after Yeager fails. The restored CouchDB dataset corresponds to
+that service. The health canary does not authorize or execute production
+routing changes.
 
 ## Backup and custody
 
@@ -122,6 +159,13 @@ Start only the service being checked, retaining outbound isolation. Infisical
 also requires its Redis StatefulSet. Authentik's worker remains stopped during
 initial validation. Gatus's pilot config has no alert destination. Use the
 provided rejection and PostgreSQL drill scripts for repeatable checks.
+
+`test-actual-budget.py` validates a restored session, compares an existing
+budget sync-file download with its restored stored bytes, and creates, updates,
+reads and tombstones a synthetic sync file through the normal authenticated API.
+It keeps tokens in memory and prints only results/counts. This proves sync
+storage and restored-session access; it does not prove a fresh OIDC login,
+client-side budget transaction editing or end-to-end budget decryption.
 
 ## Manual promotion and failback gates
 
