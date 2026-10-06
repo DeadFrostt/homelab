@@ -1,0 +1,9 @@
+[Unit]
+Description=Pull verified recovery copies every fifteen minutes
+[Timer]
+OnCalendar=*:0/15
+RandomizedDelaySec=60
+Persistent=true
+Unit=homelab-dr-mirror.service
+[Install]
+WantedBy=timers.target

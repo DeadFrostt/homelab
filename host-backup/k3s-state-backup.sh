@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=backup-verify.sh
+source "$SCRIPT_DIR/backup-verify.sh"
+
 CONFIG_FILE="${K3S_BACKUP_CONFIG:-/home/ubuntu/.config/docker-state-backup/config}"
 RCLONE_CONFIG_FILE="${K3S_BACKUP_RCLONE_CONFIG:-/home/ubuntu/.config/rclone/rclone.conf}"
 LOCAL_ROOT="${K3S_BACKUP_LOCAL_ROOT:-/var/lib/k3s-state-backups}"
 LOCK_FILE="${K3S_BACKUP_LOCK:-/run/lock/k3s-state-backup.lock}"
-LOCAL_RETENTION_DAYS="${K3S_BACKUP_LOCAL_RETENTION_DAYS:-7}"
-REMOTE_RETENTION_DAYS="${K3S_BACKUP_REMOTE_RETENTION_DAYS:-30}"
+LOCAL_RETENTION_DAYS="${K3S_BACKUP_LOCAL_RETENTION_DAYS:-2}"
+REMOTE_RETENTION_DAYS="${K3S_BACKUP_REMOTE_RETENTION_DAYS:-14}"
 K3S_DB="/var/lib/rancher/k3s/server/db/state.db"
 K3S_TOKEN="/var/lib/rancher/k3s/server/token"
 LOCAL_ONLY=0
@@ -85,10 +89,15 @@ trap - EXIT
 if (( ! LOCAL_ONLY )); then
   remote="${RCLONE_DESTINATION%/}/k3s/$host/$snapshot_id"
   echo "Upload encrypted K3s snapshot: $remote"
-  rclone --config "$RCLONE_CONFIG_FILE" copy "$snapshot" "$remote" --checkers 4 --transfers 2
-  rclone --config "$RCLONE_CONFIG_FILE" check "$snapshot" "$remote" --one-way
-  rclone --config "$RCLONE_CONFIG_FILE" delete "${RCLONE_DESTINATION%/}/k3s/$host" --min-age "${REMOTE_RETENTION_DAYS}d" --rmdirs
+  backup_rclone --config "$RCLONE_CONFIG_FILE" copy "$snapshot" "$remote" --checkers 4 --transfers 2
+  if ! verify_remote_snapshot "$snapshot" "$remote" --config "$RCLONE_CONFIG_FILE"; then
+    echo "ERROR: Uploaded K3s snapshot is unverified; history retained." >&2
+    exit 1
+  fi
+  record_verified_snapshot "$LOCAL_ROOT" "$snapshot"
+  backup_rclone --config "$RCLONE_CONFIG_FILE" delete "${RCLONE_DESTINATION%/}/k3s/$host" --min-age "${REMOTE_RETENTION_DAYS}d" --rmdirs --b2-hard-delete
 fi
 
-find "$LOCAL_ROOT" -mindepth 1 -maxdepth 1 -type d -name '20*T*Z' -mtime "+$LOCAL_RETENTION_DAYS" -exec rm -rf -- {} +
+prune_local_snapshots "$LOCAL_ROOT" "$LOCAL_RETENTION_DAYS"
+
 echo "K3s state backup complete: $snapshot"

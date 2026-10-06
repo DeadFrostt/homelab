@@ -1,0 +1,14 @@
+[Unit]
+Description=Private home backup freshness endpoint
+After=network.target
+[Service]
+ExecStart=/usr/bin/python3 /usr/local/lib/homelab-dr/status.py
+Restart=on-failure
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadOnlyPaths=/etc/homelab-dr /var/lib/homelab-dr
+[Install]
+WantedBy=multi-user.target

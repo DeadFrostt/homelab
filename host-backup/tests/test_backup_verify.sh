@@ -4,7 +4,9 @@ set -euo pipefail
 repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
-mkdir -p "$tmp/bin"
+mkdir -p "$tmp/bin" "$tmp/source"
+printf content >"$tmp/source/data.age"
+(cd "$tmp/source" && sha256sum data.age >SHA256SUMS)
 
 cat >"$tmp/bin/timeout" <<'EOF'
 #!/usr/bin/env bash
@@ -35,12 +37,12 @@ export ATTEMPT_FILE="$tmp/attempts"
 source "$repo/host-backup/backup-verify.sh"
 
 export SUCCEED_ON_ATTEMPT=2
-verify_remote_snapshot /snapshot remote:bucket/path --config /test/rclone.conf
+verify_remote_snapshot "$tmp/source" remote:bucket/path
 [[ $(<"$ATTEMPT_FILE") == 2 ]]
 
 printf '0' >"$ATTEMPT_FILE"
 export SUCCEED_ON_ATTEMPT=4
-if verify_remote_snapshot /snapshot remote:bucket/path --config /test/rclone.conf; then
+if verify_remote_snapshot "$tmp/source" remote:bucket/path; then
   printf '%s\n' 'expected verification to fail after retry budget' >&2
   exit 1
 fi

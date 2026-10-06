@@ -1,0 +1,8 @@
+[Unit]
+Description=Daily complete portable application recovery set
+[Timer]
+OnCalendar=*-*-* 02:15:00
+RandomizedDelaySec=60
+Persistent=true
+[Install]
+WantedBy=timers.target
