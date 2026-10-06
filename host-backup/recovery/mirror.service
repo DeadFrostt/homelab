@@ -1,0 +1,12 @@
+[Unit]
+Description=Verify independent home recovery copies from B2
+After=k3s.service network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/lib/homelab-dr/recovery.py mirror
+TimeoutStartSec=20min
+UMask=0077
+Nice=10
+PrivateTmp=true
+NoNewPrivileges=true

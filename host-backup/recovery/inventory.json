@@ -1,0 +1,26 @@
+{
+  "primary": "yeager",
+  "recovery": "ackermann-dr",
+  "protected": [
+    "gatus",
+    "vaultwarden",
+    "actual-budget",
+    "infisical",
+    "authentik",
+    "couch-db",
+    "zipline",
+    "matrix",
+    "mas"
+  ],
+  "initial_recovery": [
+    "gatus",
+    "vaultwarden",
+    "actual-budget",
+    "couch-db",
+    "zipline",
+    "infisical",
+    "authentik"
+  ],
+  "bulk_media": "excluded",
+  "automatic_promotion": false
+}

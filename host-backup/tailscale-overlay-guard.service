@@ -1,0 +1,14 @@
+[Unit]
+Description=Prevent recursive Tailscale transport over the Kubernetes pod overlay
+After=network-online.target ufw.service tailscaled.service k3s.service
+Wants=network-online.target tailscaled.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/tailscale-overlay-guard start
+ExecReload=/usr/local/sbin/tailscale-overlay-guard start
+ExecStop=/usr/local/sbin/tailscale-overlay-guard stop
+
+[Install]
+WantedBy=multi-user.target

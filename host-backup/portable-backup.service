@@ -1,0 +1,21 @@
+[Unit]
+Description=Verified encrypted portable application recovery set
+Requires=k3s.service
+After=k3s.service network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+Environment=BACKUP_RCLONE_CONFIG=/etc/homelab-dr/source-rclone.conf
+Environment=DR_CLUSTER_UID=7642931e-bd8f-4aef-9d93-5bee53033e7e
+ExecStart=/usr/local/lib/homelab-dr/portable-backup.sh
+TimeoutStartSec=35min
+UMask=0077
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+RuntimeDirectory=homelab-dr-plain
+RuntimeDirectoryMode=0700
+PrivateTmp=true
+NoNewPrivileges=true
+MemoryMax=2G
+CPUQuota=100%

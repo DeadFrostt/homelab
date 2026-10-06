@@ -1,0 +1,9 @@
+[Unit]
+Description=Back up home application data every thirty minutes
+[Timer]
+OnCalendar=*:0/30
+RandomizedDelaySec=60
+Persistent=true
+Unit=homelab-dr-home-backup.service
+[Install]
+WantedBy=timers.target

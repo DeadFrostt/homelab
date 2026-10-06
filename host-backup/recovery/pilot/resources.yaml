@@ -1,0 +1,98 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gatus
+  labels:
+    homelab.dev/site: home-recovery
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gatus-data
+  namespace: gatus
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gatus-config
+  namespace: gatus
+data:
+  config.yaml: "web:\n  port: 8080\nstorage:\n  type: sqlite\n  path: /data/gatus-lab.db\n\
+    endpoints:\n  - name: synthetic-pilot\n    url: http://gatus.gatus.svc.cluster.local:8080/health\n\
+    \    interval: 10s\n    conditions:\n      - \"[STATUS] == 200\"\n"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gatus
+  namespace: gatus
+  labels:
+    app: gatus
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: gatus
+  template:
+    metadata:
+      labels:
+        app: gatus
+    spec:
+      containers:
+      - name: gatus
+        image: ghcr.io/twin/gatus:stable@sha256:c5f210d095fa78e6efaa20ffeb14803f2ba4f10615e16a6d12087697149617f0
+        ports:
+        - containerPort: 8080
+          name: http
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        - name: config
+          mountPath: /config/config.yaml
+          subPath: config.yaml
+        livenessProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        readinessProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          limits:
+            memory: 256Mi
+            cpu: 500m
+          requests:
+            memory: 128Mi
+            cpu: 50m
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: gatus-data
+      - name: config
+        configMap:
+          name: gatus-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gatus
+  namespace: gatus
+spec:
+  selector:
+    app: gatus
+  ports:
+  - port: 8080
+    targetPort: 8080
+    nodePort: 30386
+    name: http
+  type: NodePort

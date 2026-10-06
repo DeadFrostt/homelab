@@ -1,0 +1,25 @@
+name: Recovery tooling tests
+on:
+  pull_request:
+    paths: ['host-backup/**', '.github/workflows/recovery-tests.yml']
+  push:
+    branches: [main]
+    paths: ['host-backup/**', '.github/workflows/recovery-tests.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  recovery-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Install verifier dependency
+        run: sudo apt-get update && sudo apt-get install -y rclone
+      - name: Check shell scripts
+        run: bash -n host-backup/*.sh
+      - name: SQLite consistency and retention tests
+        run: python3 host-backup/test-portable.py
+      - name: Content verification failure tests
+        run: bash host-backup/test-backup-verify.sh
+      - name: Bounded verification retries
+        run: bash host-backup/tests/test_backup_verify.sh
