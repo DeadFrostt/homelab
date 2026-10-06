@@ -46,8 +46,8 @@ Revoking the temporary management token does not revoke this runtime token.
 
 Routing inventory and unchanged baseline configurations are held in Yeager's
 root-only `/etc/homelab-dr/cloudflare-*-baseline.json` and
-`cloudflare-config-*.json`. Copy the required non-secret inventory to independent
-owner custody before relying on it during an outage. `home-tunnel-created.json`
+`cloudflare-config-*.json`. A sanitized copy is also held in the guest at
+`/etc/homelab-dr/routing-inventory.json`; keep it in independent owner custody. `home-tunnel-created.json`
 records the new tunnel and DNS identifiers.
 
 The supplied management token covers DNS for `pleasedontdmca.me`. Existing
@@ -166,6 +166,30 @@ reads and tombstones a synthetic sync file through the normal authenticated API.
 It keeps tokens in memory and prints only results/counts. This proves sync
 storage and restored-session access; it does not prove a fresh OIDC login,
 client-side budget transaction editing or end-to-end budget decryption.
+
+`test-authentik.py` creates and removes a synthetic home-only user/TOTP device.
+It runs Django's request client through the restored authentication flow,
+checks password/MFA success and wrong-password/wrong-code rejection, and verifies
+the authenticated identity. It does not exercise browser TLS or public SSO redirects.
+
+`test-vaultwarden.py` creates a disposable namespace with a consistent copy of
+the restored SQLite database and RSA keys. It preserves the three original
+users and 459 ciphers, omits persisted SMTP/SSO admin config in this disposable
+copy, blocks external egress, and tests a synthetic password login, wrapped-key
+decryption, encrypted cipher write/read/sync and encrypted attachment
+upload/download/decryption. The synthetic account and namespace are removed.
+It does not decrypt the owner's vault or validate the owner's SSO login.
+The helper requires Python `cryptography`, available in the recovery Ubuntu VM.
+
+The home backup `20261006T042306Z` verified 33 offsite files with zero differences.
+Its signed home-site snapshot decrypted successfully; its restored Actual SQLite
+passed integrity checks and contained the synthetic sync-write deletion records.
+This checks backup capture of new home writes without promoting the home site.
+
+The owner deferred stopping Yeager and the production switchover/failback drill.
+All tests above run with Yeager serving production. Remaining owner acceptance
+includes real vault/budget decryption, notes-client synchronization and browser
+SSO; those are not implied by synthetic checks.
 
 ## Manual promotion and failback gates
 
