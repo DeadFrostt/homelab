@@ -1,0 +1,25 @@
+[Unit]
+Description=Verified encrypted backups of isolated home application data
+Requires=k3s.service
+After=k3s.service network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+Environment=DR_SOURCE_SITE=ackermann-dr
+Environment=DR_CLUSTER_UID=c4bc6bed-e44c-4469-af62-4d759ccc6312
+Environment=DR_BACKUP_CONFIG=/etc/homelab-dr/home-backup.conf
+Environment=BACKUP_RCLONE_CONFIG=/etc/homelab-dr/home-writer-rclone.conf
+Environment=BACKUP_KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+Environment=PORTABLE_BACKUP_ROOT=/var/lib/homelab-dr/home-writes
+Environment=DR_CACHE_BUDGET_GIB=6
+Environment=DR_SIGNING_KEY=/etc/homelab-dr/home-signing.key
+ExecStart=/usr/local/lib/homelab-dr/portable-backup.sh --apps all
+TimeoutStartSec=35min
+UMask=0077
+Nice=10
+RuntimeDirectory=homelab-dr-plain
+RuntimeDirectoryMode=0700
+PrivateTmp=true
+NoNewPrivileges=true
+MemoryMax=2G
+CPUQuota=100%

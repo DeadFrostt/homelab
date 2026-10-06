@@ -103,11 +103,16 @@ def clean_object(obj):
     return obj
 
 def create_snapshot(root, recipient, remote=None, local_only=False):
+    site=os.environ.get('DR_SOURCE_SITE','yeager')
+    if site not in ['yeager','ackermann-dr']: raise ValueError('Unknown backup site')
+    expected_uid=os.environ.get('DR_CLUSTER_UID')
+    actual_uid=get('get','namespace','kube-system')['metadata']['uid']
+    if not expected_uid or actual_uid!=expected_uid: raise ValueError('Backup cluster identity mismatch')
     if shutil.disk_usage(root).free < 8*1024**3: raise RuntimeError('Source disk reserve below 8 GiB; snapshot refused')
     stamp=dt.datetime.now(dt.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
     work=root/('.'+stamp+'.incomplete'); final=root/stamp
     work.mkdir(mode=0o700)
-    manifest={'format':1,'snapshot':stamp,'source_site':'yeager','started_utc':now(),'applications':{},'automatic_promotion':False}
+    manifest={'format':1,'snapshot':stamp,'source_site':site,'started_utc':now(),'applications':{},'automatic_promotion':False}
     try:
         pvs=get('get','pv')['items']
         paths={}
@@ -172,14 +177,18 @@ def create_snapshot(root, recipient, remote=None, local_only=False):
         work.rename(final)
         if not local_only:
             if not remote: raise ValueError('Offsite destination is required')
-            dest=remote.rstrip('/')+'/portable/yeager/'+stamp
+            dest=remote.rstrip('/')+'/portable/'+site+'/'+stamp
             run(['env','-u','JOURNAL_STREAM','rclone','--config',os.environ.get('BACKUP_RCLONE_CONFIG','/home/ubuntu/.config/rclone/rclone.conf'),'copy',str(final),dest,'--transfers','2','--checkers','2'],timeout=600)
             run(['bash','-c','source "$1"; verify_remote_snapshot "$2" "$3" --config "$4"','verify',str(Path(__file__).with_name('backup-verify.sh')),str(final),dest,os.environ.get('BACKUP_RCLONE_CONFIG','/home/ubuntu/.config/rclone/rclone.conf')],timeout=1900)
+            for artifact in ['SHA256SUMS','SHA256SUMS.sig']:
+                downloaded=run(['rclone','--config',os.environ.get('BACKUP_RCLONE_CONFIG','/home/ubuntu/.config/rclone/rclone.conf'),'cat',dest+'/'+artifact],capture_output=True,timeout=60).stdout
+                if downloaded!=(final/artifact).read_bytes(): raise ValueError('Offsite signed manifest differs; retention refused')
             marker={'snapshot':stamp,'verified_utc':now(),'remote':dest}
             m=root/'.last-verified.tmp';m.write_text(json.dumps(marker)+'\n');m.replace(root/'.last-verified.json')
-            for old in retention_plan(root):
+            budget=int(os.environ.get('DR_CACHE_BUDGET_GIB','20'))*1024**3
+            for old in retention_plan(root,limit_bytes=budget):
                 # A failed remote deletion leaves the local verified history.
-                run(['rclone','--config',os.environ.get('BACKUP_RCLONE_CONFIG','/home/ubuntu/.config/rclone/rclone.conf'),'purge',remote.rstrip('/')+'/portable/yeager/'+old.name],timeout=120)
+                run(['rclone','--config',os.environ.get('BACKUP_RCLONE_CONFIG','/home/ubuntu/.config/rclone/rclone.conf'),'purge',remote.rstrip('/')+'/portable/'+site+'/'+old.name],timeout=120)
                 shutil.rmtree(old)
         print(json.dumps({'snapshot':stamp,'applications':len(manifest['applications']),'verified_offsite':not local_only}))
         return final

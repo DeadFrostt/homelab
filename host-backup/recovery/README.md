@@ -29,6 +29,8 @@ and `backup-verify.sh` into `/usr/local/lib/homelab-dr`. Install the portable
 service/timer files into `/etc/systemd/system` and enable both timers. Priority
 sets run every 30 minutes; full sets run daily. Both services have a shared lock,
 a one-core CPU limit, 2 GiB memory limit, and an 8 GiB free-disk reserve.
+The unit's `DR_CLUSTER_UID` must match the intended source cluster; a rebuild
+requires an explicit identity update before exports resume.
 
 The source's existing backup config supplies the age recipient and B2
 destination. `/etc/homelab-dr/source-rclone.conf` supplies a separate B2 writer
@@ -65,7 +67,8 @@ retains the latest priority and full sets independently. Unsigned, incomplete,
 corrupt, incorrectly signed and stale sets are refused.
 
 Retention prefers 48 recent sets, 14 daily full sets and eight weekly full
-sets, with a 20 GiB cache budget. The newest set containing each protected
+sets, with a 20 GiB source budget and a 6 GiB budget for each of the home
+mirror and home-write caches. The newest set containing each protected
 application is always retained. Budget overflow of indispensable sets stops
 pruning. Source remote pruning occurs only after a new offsite set verifies;
 the home credential cannot upload or delete remote backups.
@@ -73,6 +76,14 @@ the home credential cannot upload or delete remote backups.
 The owner should additionally hold the age identity, B2 account recovery and
 Cloudflare/Oracle access on an independent personal device/offline medium.
 The VM copy protects against Yeager loss; it does not establish that third copy.
+
+The home backup service uses the same tested portable exporter with a separate
+signing key and writer credential restricted to `portable/ackermann-dr/`.
+Install `home-backup.service` as `homelab-dr-home-backup.service` and the timer
+as `homelab-dr-home-backup.timer`. Enable the timer once the home backup/restore
+drill passes. A home set records `source_site=ackermann-dr`; it cannot be
+mistaken for a Yeager recovery point. The home public trust anchor is also held
+on Yeager. Verify it with the `verify-home` command before a failback export.
 
 ## Isolated restore sequence
 

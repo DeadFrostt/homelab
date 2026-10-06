@@ -7,8 +7,9 @@ from recovery import guard, verify, CACHE, CONFIG, run
 
 def kube(*args,**kw): return run(['k3s','kubectl',*args],**kw)
 
-def main(snapshot):
-    guard(); manifest=verify(CACHE/snapshot)
+def main(snapshot,site='yeager'):
+    base=CACHE if site=='yeager' else Path('/var/lib/homelab-dr/home-writes')
+    guard(); manifest=verify(base/snapshot,expected_site=site)
     ns='dr-database-tests'; results=[]
     kube('apply','-f','-',input=json.dumps({'apiVersion':'v1','kind':'Namespace','metadata':{'name':ns}}).encode(),capture_output=True)
     policy={'apiVersion':'networking.k8s.io/v1','kind':'NetworkPolicy','metadata':{'name':'deny-all','namespace':ns},'spec':{'podSelector':{},'policyTypes':['Ingress','Egress']}}
@@ -24,14 +25,14 @@ def main(snapshot):
             for attempt in range(60):
                 try: pg('pg_isready','-h','/scratch',capture_output=True);break
                 except subprocess.CalledProcessError: time.sleep(1)
-            globals_sql=run(['age','-d','-i',str(CONFIG/'identity.txt'),str(CACHE/snapshot/app/'globals.sql.age')],capture_output=True).stdout.decode()
+            globals_sql=run(['age','-d','-i',str(CONFIG/'identity.txt'),str(base/snapshot/app/'globals.sql.age')],capture_output=True).stdout.decode()
             # The disposable bootstrap superuser already exists. Preserve all
             # other roles and their original database ownership/passwords.
             globals_sql='\n'.join(line for line in globals_sql.splitlines() if not line.startswith(('CREATE ROLE postgres;','ALTER ROLE postgres ')))
             pg('psql','-h','/scratch','-U','postgres','-d','postgres','-v','ON_ERROR_STOP=1',input=globals_sql.encode(),capture_output=True)
             for db in info['databases']:
                 if db!='postgres': pg('createdb','-h','/scratch','-U','postgres',db,capture_output=True)
-                encrypted=CACHE/snapshot/app/(db+'.dump.age')
+                encrypted=base/snapshot/app/(db+'.dump.age')
                 # Stream plaintext directly between age and pg_restore.
                 producer=subprocess.Popen(['age','-d','-i',str(CONFIG/'identity.txt'),str(encrypted)],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
                 try:
@@ -43,10 +44,10 @@ def main(snapshot):
                 tables=pg('psql','-h','/scratch','-U','postgres','-d',db,'-Atc',"SELECT count(*) FROM pg_class WHERE relkind='r' AND relnamespace IN (SELECT oid FROM pg_namespace WHERE nspname NOT IN ('pg_catalog','information_schema'));",capture_output=True).stdout.decode().strip()
                 results.append({'app':app,'database':db,'tables':int(tables),'restored':True})
             kube('-n',ns,'delete','pod',name,'--wait=true',capture_output=True)
-        report={'snapshot':snapshot,'architecture':'amd64','databases':results,'completed_utc':__import__('datetime').datetime.now(__import__('datetime').timezone.utc).isoformat()}
-        Path('/var/lib/homelab-dr/postgres-drill.json').write_text(json.dumps(report,indent=2)+'\n')
+        report={'snapshot':snapshot,'source_site':site,'architecture':'amd64','databases':results,'completed_utc':__import__('datetime').datetime.now(__import__('datetime').timezone.utc).isoformat()}
+        Path('/var/lib/homelab-dr/postgres-drill-'+site+'.json').write_text(json.dumps(report,indent=2)+'\n')
         print(json.dumps(report))
     finally:
         kube('delete','namespace',ns,'--wait=false',capture_output=True)
 
-if __name__=='__main__': main(sys.argv[1])
+if __name__=='__main__': main(sys.argv[1],sys.argv[2] if len(sys.argv)>2 else 'yeager')

@@ -24,11 +24,13 @@ def guard():
         raise ValueError('Recovery node identity mismatch')
     return expected
 
-def verify(path, max_age_hours=24):
+def verify(path, max_age_hours=24, expected_site='yeager'):
     path = Path(path)
     if not STAMP.fullmatch(path.name): raise ValueError('Invalid snapshot identifier')
     sums = path/'SHA256SUMS'
-    run(['openssl','pkeyutl','-verify','-pubin','-inkey',str(CONFIG/'source-signing.pub'),'-rawin','-in',str(sums),'-sigfile',str(path/'SHA256SUMS.sig')],capture_output=True)
+    if expected_site not in ['yeager','ackermann-dr']: raise ValueError('Unknown backup site')
+    public_key=CONFIG/('source-signing.pub' if expected_site=='yeager' else 'home-signing.pub')
+    run(['openssl','pkeyutl','-verify','-pubin','-inkey',str(public_key),'-rawin','-in',str(sums),'-sigfile',str(path/'SHA256SUMS.sig')],capture_output=True)
     seen = set()
     for line in sums.read_text().splitlines():
         digest, name = line.split('  ',1)
@@ -42,7 +44,7 @@ def verify(path, max_age_hours=24):
             if hashlib.file_digest(stream,'sha256').hexdigest()!=digest: raise ValueError('Snapshot checksum mismatch')
     if 'manifest.json' not in seen: raise ValueError('Unsigned snapshot metadata')
     manifest=json.loads((path/'manifest.json').read_text())
-    if manifest['snapshot']!=path.name or manifest['source_site']!='yeager' or manifest.get('format')!=1:
+    if manifest['snapshot']!=path.name or manifest['source_site']!=expected_site or manifest.get('format')!=1:
         raise ValueError('Snapshot metadata mismatch')
     if not manifest['applications'] or not set(manifest['applications'])<=APPS:
         raise ValueError('Unexpected protected application')
@@ -65,10 +67,11 @@ def mirror():
         final=CACHE/stamp
         try:
             if not final.exists():
+                if shutil.disk_usage(CACHE).free < 8*1024**3: raise ValueError('Home disk reserve below 8 GiB')
                 temp=CACHE/('.'+stamp+'.incomplete')
                 if temp.exists(): shutil.rmtree(temp)
                 temp.mkdir(mode=0o700)
-                run(base+['copy',config['remote']+'/'+stamp,str(temp),'--transfers','2'],timeout=600)
+                run(base+['copy',config['remote']+'/'+stamp,str(temp),'--transfers','2','--max-transfer','2G','--cutoff-mode','cautious'],timeout=600)
                 # Verification uses the signed timestamp, so rename only within
                 # a private staging parent before validation.
                 staging=CACHE/('.stage-'+stamp); staging.mkdir(mode=0o700,exist_ok=True)
@@ -87,7 +90,7 @@ def mirror():
         except (ValueError,subprocess.CalledProcessError,FileNotFoundError,KeyError) as error:
             print('Rejected recovery set '+stamp+': '+type(error).__name__,flush=True)
     if not priority: raise ValueError('No fresh verified priority recovery set')
-    for old in retention_plan(CACHE): shutil.rmtree(old)
+    for old in retention_plan(CACHE,limit_bytes=6*1024**3): shutil.rmtree(old)
     print(json.dumps({'priority_available':priority,'full_available':complete}))
 
 def extract_files(snapshot, app, claim, destination):
@@ -122,9 +125,11 @@ def main():
     parser=argparse.ArgumentParser(); commands=parser.add_subparsers(dest='command',required=True)
     commands.add_parser('mirror')
     p=commands.add_parser('verify');p.add_argument('snapshot');p.add_argument('--max-age-hours',type=float,default=24)
+    p=commands.add_parser('verify-home');p.add_argument('snapshot')
     p=commands.add_parser('restore-files');p.add_argument('snapshot');p.add_argument('app');p.add_argument('claim');p.add_argument('destination')
     args=parser.parse_args()
     if args.command=='mirror': mirror()
     elif args.command=='verify': guard();print(json.dumps(verify(CACHE/args.snapshot,args.max_age_hours)))
+    elif args.command=='verify-home': guard();print(json.dumps(verify(Path('/var/lib/homelab-dr/home-writes')/args.snapshot,expected_site='ackermann-dr')))
     else: extract_files(args.snapshot,args.app,args.claim,args.destination)
 if __name__=='__main__': main()

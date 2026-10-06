@@ -6,6 +6,7 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 Environment=BACKUP_RCLONE_CONFIG=/etc/homelab-dr/source-rclone.conf
+Environment=DR_CLUSTER_UID=7642931e-bd8f-4aef-9d93-5bee53033e7e
 ExecStart=/usr/local/lib/homelab-dr/portable-backup.sh --apps all
 TimeoutStartSec=35min
 UMask=0077
