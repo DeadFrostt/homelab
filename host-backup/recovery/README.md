@@ -19,8 +19,11 @@ curl -fsS http://127.0.0.1:9387/health
 
 The guest uses static 10.67.46.10/24 on the existing LXD NAT bridge; the host's
 firewall was not changed. VM autostart and the guest systemd services persist.
+The LXD NIC also reserves 10.67.46.10 for this VM to prevent future DHCP conflicts.
 The freshness endpoint listens on guest port 9387 and reports backup readiness
 separately from promotion readiness. It has no credentials in its responses.
+The notification-free Gatus pilot watches this endpoint and the primary's
+public Authentik health URL independently of the primary cluster API.
 
 ## Backup and custody
 

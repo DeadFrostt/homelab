@@ -33,6 +33,10 @@ class PortableTests(unittest.TestCase):
             self.assertNotIn(root/start.strftime('%Y%m%dT%H%M%SZ'),doomed)
             self.assertNotIn(root/(start+dt.timedelta(hours=99)).strftime('%Y%m%dT%H%M%SZ'),doomed)
             self.assertGreater(len(doomed),50)
+    def test_directory_link_is_not_silently_omitted(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);source=root/'source';source.mkdir();(source/'linked-directory').symlink_to('/etc',target_is_directory=True)
+            with self.assertRaises(ValueError): backup.copy_consistent_tree(source,root/'out')
     def test_oversized_protected_sets_refuse_pruning(self):
         with tempfile.TemporaryDirectory() as temporary:
             p=Path(temporary)/'20260101T000000Z';p.mkdir()

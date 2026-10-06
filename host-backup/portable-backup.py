@@ -25,7 +25,7 @@ def tree_signature(root):
     result = {}
     for p in sorted(root.rglob('*')):
         rel = p.relative_to(root)
-        if excluded(rel) or p.is_dir(): continue
+        if excluded(rel) or (p.is_dir() and not p.is_symlink()): continue
         s = p.lstat(); result[str(rel)] = (s.st_ino, s.st_size, s.st_mtime_ns, s.st_mode)
     return result
 
@@ -51,10 +51,7 @@ def copy_consistent_tree(source, target, deadline_seconds=60):
     for rel in before:
         p, q = source/rel, target/rel
         if p.is_symlink():
-            link = os.readlink(p)
-            if Path(link).is_absolute() or not (p.parent/link).resolve().is_relative_to(source.resolve()):
-                raise ValueError('Refusing file tree with an escaping symlink')
-            q.parent.mkdir(parents=True, exist_ok=True); q.symlink_to(link); continue
+            raise ValueError('Archive links require review; refusing a set the recovery helper cannot restore')
         if p.name.endswith('-wal'): continue
         q.parent.mkdir(parents=True, exist_ok=True)
         with p.open('rb') as f: is_sqlite = f.read(16) == b'SQLite format 3\0'

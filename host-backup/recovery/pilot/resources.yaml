@@ -25,8 +25,11 @@ metadata:
   namespace: gatus
 data:
   config.yaml: "web:\n  port: 8080\nstorage:\n  type: sqlite\n  path: /data/gatus-lab.db\n\
-    endpoints:\n  - name: synthetic-pilot\n    url: http://gatus.gatus.svc.cluster.local:8080/health\n\
-    \    interval: 10s\n    conditions:\n      - \"[STATUS] == 200\"\n"
+    endpoints:\n- name: synthetic-pilot\n  url: http://gatus.gatus.svc.cluster.local:8080/health\n\
+    \  interval: 10s\n  conditions:\n  - '[STATUS] == 200'\n- name: verified-recovery-backups\n\
+    \  url: http://10.67.46.10:9387/health\n  interval: 30s\n  conditions:\n  - '[STATUS]\
+    \ == 200'\n- name: primary-authentik-public\n  url: https://sso.pleasedontdmca.me/-/health/ready/\n\
+    \  interval: 30s\n  conditions:\n  - '[STATUS] == 200'\n"
 ---
 apiVersion: apps/v1
 kind: Deployment
