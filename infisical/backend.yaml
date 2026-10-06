@@ -13,6 +13,8 @@ spec:
       labels:
         app: infisical
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: yeager
       containers:
         - name: infisical
           image: infisical/infisical:latest@sha256:6b911e3938ac2ff385a782df59ce9272799be7976d26dc5667266a2aecac4116

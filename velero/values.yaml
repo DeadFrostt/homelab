@@ -88,3 +88,6 @@ schedules:
         - velero
       defaultVolumesToFsBackup: true
       snapshotVolumes: false
+
+nodeSelector:
+  kubernetes.io/hostname: yeager
