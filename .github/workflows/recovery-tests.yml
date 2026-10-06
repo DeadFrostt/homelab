@@ -19,6 +19,10 @@ jobs:
         run: bash -n host-backup/*.sh
       - name: SQLite consistency and retention tests
         run: python3 host-backup/test-portable.py
+      - name: Native upload verification without payload downloads
+        run: python3 host-backup/test-native-verify.py
+      - name: Stop capped downloads and preserve the recovery cache
+        run: python3 host-backup/test-mirror-cap.py
       - name: Content verification failure tests
         run: bash host-backup/test-backup-verify.sh
       - name: Bounded verification retries

@@ -78,7 +78,11 @@ preserve its public trust anchor. Never commit either private credential.
 Each set contains encrypted online SQLite snapshots, stable file copies,
 PostgreSQL logical dumps, role exports, and indispensable application secrets
 and stopped resource definitions. The signed SHA256SUMS covers the encrypted
-payloads and metadata. Backup success requires remote download verification.
+payloads and metadata. Upload success requires B2 native object SHA-1/size verification for every
+object, including the signed manifest, plus local SHA-256 integrity. Missing
+native hashes refuse success and pruning. The home mirror separately downloads
+and verifies signed SHA-256 and decryption; upload verification does not download
+the whole snapshot a second time.
 File changes during an application's consistency interval refuse the set.
 Logical dumps do not provide recovery between snapshot points.
 
@@ -117,10 +121,29 @@ The VM copy protects against Yeager loss; it does not establish that third copy.
 The home backup service uses the same tested portable exporter with a separate
 signing key and writer credential restricted to `portable/ackermann-dr/`.
 Install `home-backup.service` as `homelab-dr-home-backup.service` and the timer
-as `homelab-dr-home-backup.timer`. Enable the timer once the home backup/restore
-drill passes. A home set records `source_site=ackermann-dr`; it cannot be
+as `homelab-dr-home-backup.timer`. Keep the timer disabled while this is a non-authoritative standby.
+Run it explicitly for drills; enable it only when preparing actual promotion
+and maintain it while home writes are authoritative. A home set records `source_site=ackermann-dr`; it cannot be
 mistaken for a Yeager recovery point. The home public trust anchor is also held
 on Yeager. Verify it with the `verify-home` command before a failback export.
+
+## Download cap handling
+
+The $0.10 daily Backblaze download cap was reached during initial tests and
+continuous full read-back verification. Repeated standby exports were also
+being verified every thirty minutes despite no authoritative home writes.
+The standby writer timer is now disabled; its tested service and credentials
+remain available for promotion. The source uploader now compares native hashes
+without payload downloads. The mirror still retrieves fresh source sets and
+checks signed SHA-256/decryption, but stops at a download-cap error rather than
+trying all older snapshots. Last verified cache/history is retained.
+
+A typical six-app set measured 87.2 MiB, about 4.1 GiB/day at thirty-minute
+intervals for each full-copy reader. Existing nightly backups and Velero add
+traffic; measure total use after reset. Provider spending caps are unchanged.
+A cap prevents fresh home downloads and Velero operations until the provider
+counter resets or the owner raises the cap. Backup freshness must remain visibly
+unhealthy when new sets cannot be retrieved. Never call cached old data current.
 
 ## Isolated restore sequence
 
