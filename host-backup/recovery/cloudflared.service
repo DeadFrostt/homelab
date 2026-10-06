@@ -1,0 +1,28 @@
+[Unit]
+Description=Independent home recovery health tunnel
+Wants=network-online.target homelab-dr-status.service
+After=network-online.target homelab-dr-status.service
+ConditionPathExists=/etc/homelab-dr/cloudflared-runtime-token
+
+[Service]
+Type=simple
+DynamicUser=yes
+LoadCredential=tunnel-token:/etc/homelab-dr/cloudflared-runtime-token
+ExecStart=/usr/local/bin/cloudflared --no-autoupdate --metrics 127.0.0.1:20241 tunnel run --token-file %d/tunnel-token
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+MemoryMax=256M
+CPUQuota=50%
+
+[Install]
+WantedBy=multi-user.target

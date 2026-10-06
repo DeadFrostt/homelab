@@ -25,6 +25,39 @@ separately from promotion readiness. It has no credentials in its responses.
 The notification-free Gatus pilot watches this endpoint and the primary's
 public Authentik health URL independently of the primary cluster API.
 
+## Independent Cloudflare path
+
+The separate remotely managed `ackermann-dr` tunnel serves only
+`https://dr-check.pleasedontdmca.me/health`, backed by the guest's local
+freshness endpoint. Other paths return 404. This endpoint exposes no database,
+application content or credentials. Existing production DNS records and tunnels
+are unchanged. Public HTTP 200 was verified from Yeager and the home VM, and
+again after restarting the tunnel service.
+
+Install the verified AMD64 Cloudflare binary as `/usr/local/bin/cloudflared`
+and `cloudflared.service` as `homelab-dr-cloudflared.service`. The tested binary
+is 2026.10.0; SHA256 is
+`d33ff2d14475178d2012c2c56beba87389ac5ded27649519f198a7d3134a99db`.
+The root-only `/etc/homelab-dr/cloudflared-runtime-token` belongs to this tunnel
+alone. Systemd passes it with `LoadCredential` to a dynamic service user; the
+API management token is not installed in the VM. The service is enabled at
+boot and does not rely on the primary cluster, secrets operator or GitOps.
+Revoking the temporary management token does not revoke this runtime token.
+
+Routing inventory and unchanged baseline configurations are held in Yeager's
+root-only `/etc/homelab-dr/cloudflare-*-baseline.json` and
+`cloudflare-config-*.json`. Copy the required non-secret inventory to independent
+owner custody before relying on it during an outage. `home-tunnel-created.json`
+records the new tunnel and DNS identifiers.
+
+The supplied management token covers DNS for `pleasedontdmca.me`. Existing
+Vaultwarden (`vault.deadfrost.dev`) and the notes tunnel
+(`couch.deadfrost.dev`) need separate `deadfrost.dev` DNS control. Verify which
+notes dataset/client endpoint is authoritative before promotion: the existing
+notes tunnel points to a home Docker service, while this recovery set restores
+the Kubernetes CouchDB dataset. The health canary does not authorize or execute
+production routing changes.
+
 ## Backup and custody
 
 On Yeager, install `portable-backup.py`, `portable-backup.sh`, `retention.py`
