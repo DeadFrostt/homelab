@@ -1,2 +1,6 @@
 
 hostAPI: "http://infisical.infisical.svc.cluster.local:8080/api"
+
+controllerManager:
+  nodeSelector:
+    kubernetes.io/hostname: yeager

@@ -12,3 +12,6 @@ monitoring:
   podMonitorEnabled: false
   grafanaDashboard:
     create: false
+
+nodeSelector:
+  kubernetes.io/hostname: yeager
