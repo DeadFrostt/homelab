@@ -17,7 +17,7 @@ spec:
       dnsPolicy: ClusterFirstWithHostNet
       containers:
         - name: beszel-agent
-          image: henrygd/beszel-agent@sha256:00c88600e7d120128f623b2deb5257603d464e841fd68f88cc791dcc075f9e46
+          image: henrygd/beszel-agent@sha256:f27b1aa2c68404bc5b9e1a2ab36653bd9b4ee14f6299862f09cd5051a4134767
           env:
             - name: LISTEN
               value: "45876"
