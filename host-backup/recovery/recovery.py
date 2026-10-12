@@ -68,7 +68,7 @@ def mirror():
     # with a partial upload or a set with an invalid signature.
     complete=False; priority=False; covered=set()
     for stamp in candidates:
-        final=CACHE/stamp
+        final=CACHE/stamp; temp=None
         try:
             if priority:
                 # Metadata is only a selection hint, never a trust decision.
@@ -102,7 +102,10 @@ def mirror():
             marker={'snapshot':stamp,'verified_utc':dt.datetime.now(dt.timezone.utc).isoformat(),'applications':sorted(apps)}
             (final/'.verified.json').write_text(json.dumps(marker)+'\n')
             if complete and priority: break
-        except (ValueError,subprocess.CalledProcessError,FileNotFoundError,KeyError) as error:
+        except (ValueError,subprocess.CalledProcessError,subprocess.TimeoutExpired,FileNotFoundError,KeyError) as error:
+            # Failed, unverified downloads must not accumulate outside the
+            # verified-history budget. Existing good cache sets are untouched.
+            if temp is not None and temp.exists(): shutil.rmtree(temp)
             if isinstance(error,subprocess.CalledProcessError) and b'download_cap_exceeded' in (error.stderr or b''):
                 raise ValueError('Backblaze download cap reached; cached sets retained, download attempts stopped') from error
             print('Rejected recovery set '+stamp+': '+type(error).__name__,flush=True)
