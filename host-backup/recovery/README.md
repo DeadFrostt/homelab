@@ -108,11 +108,22 @@ retains the latest priority and full sets independently. Unsigned, incomplete,
 corrupt, incorrectly signed and stale sets are refused.
 
 Retention prefers 48 recent sets, 14 daily full sets and eight weekly full
-sets, with a 20 GiB source budget and a 6 GiB budget for each of the home
-mirror and home-write caches. The newest set containing each protected
+sets, with a 20 GiB source budget, a 4 GiB home mirror budget and a 6 GiB
+authoritative home-write budget. Obsolete standby drill history was reduced to
+2 GiB while its writer timer remained disabled. The newest set containing each protected
 application is always retained. Budget overflow of indispensable sets stops
 pruning. Source remote pruning occurs only after a new offsite set verifies;
 the home credential cannot upload or delete remote backups.
+
+The mirror prunes only previously verified history before downloading as well
+as afterward, preserving latest application coverage so low disk does not
+deadlock refresh. It selects the latest priority point and then skips older
+subsets that add no application coverage while looking for the latest full set.
+Remote metadata is only a selection hint: actual downloads still require the
+signed manifest, SHA-256 and decryption checks. This avoids downloading a whole
+day of superseded priority sets after an interruption. Velero repository
+maintenance is configured daily rather than hourly; existing repositories need
+their maintenanceFrequency patched too. Backup schedules/TTLs are unchanged.
 
 The owner should additionally hold the age identity, B2 account recovery and
 Cloudflare/Oracle access on an independent personal device/offline medium.

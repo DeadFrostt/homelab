@@ -23,6 +23,8 @@ jobs:
         run: python3 host-backup/test-native-verify.py
       - name: Stop capped downloads and preserve the recovery cache
         run: python3 host-backup/test-mirror-cap.py
+      - name: Prune before download and skip redundant subset backups
+        run: python3 host-backup/test-mirror-retention.py
       - name: Content verification failure tests
         run: bash host-backup/test-backup-verify.sh
       - name: Bounded verification retries
