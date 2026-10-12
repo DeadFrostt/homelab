@@ -2,11 +2,12 @@
 import datetime as dt, json, re
 from pathlib import Path
 
-def retention_plan(root, limit_bytes=20*1024**3):
+def retention_plan(root, limit_bytes=20*1024**3, verified_only=False):
     snapshots=[]
     for directory in Path(root).iterdir():
         if not directory.is_dir() or not re.fullmatch(r'20[0-9]{6}T[0-9]{6}Z',directory.name): continue
         if not (directory/'SHA256SUMS.sig').is_file(): continue
+        if verified_only and not (directory/'.verified.json').is_file(): continue
         try: manifest=json.loads((directory/'manifest.json').read_text())
         except (ValueError,FileNotFoundError): continue
         snapshots.append((directory,manifest,set(manifest['applications']),sum(x.stat().st_size for x in directory.rglob('*') if x.is_file())))

@@ -11,6 +11,9 @@ credentials:
   existingSecret: velero-cloud-credentials
 
 configuration:
+  # Daily repository housekeeping avoids reopening every B2 repository hourly.
+  # Backup schedules and snapshot retention are independent of this interval.
+  defaultRepoMaintainFrequency: 24h
   defaultBackupStorageLocation: v2
   defaultVolumesToFsBackup: false
   backupStorageLocation:

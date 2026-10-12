@@ -7,6 +7,7 @@ from retention import retention_plan
 CONFIG = Path('/etc/homelab-dr')
 CACHE = Path('/var/lib/homelab-dr/cache')
 STAMP = re.compile(r'20[0-9]{6}T[0-9]{6}Z')
+CACHE_BUDGET = 4*1024**3
 APPS = {'gatus','vaultwarden','actual-budget','couch-db','infisical','authentik','zipline','matrix','mas'}
 
 def run(args, **kw):
@@ -57,15 +58,28 @@ def verify(path, max_age_hours=24, expected_site='yeager'):
 
 def mirror():
     config=guard(); CACHE.mkdir(parents=True,exist_ok=True,mode=0o700)
+    # Prune verified history before fetching, so low disk cannot deadlock
+    # refresh. The retention planner always keeps latest coverage for each app.
+    for old in retention_plan(CACHE,limit_bytes=CACHE_BUDGET,verified_only=True): shutil.rmtree(old)
     base=['rclone','--config',str(CONFIG/'rclone.conf')]
     directories=json.loads(run(base+['lsjson',config['remote'],'--dirs-only'],capture_output=True).stdout)
     candidates=sorted([x['Name'] for x in directories if STAMP.fullmatch(x['Name'])],reverse=True)
     # Preserve independent latest priority and full sets; never replace a good set
     # with a partial upload or a set with an invalid signature.
-    complete=False; priority=False
+    complete=False; priority=False; covered=set()
     for stamp in candidates:
-        final=CACHE/stamp
+        final=CACHE/stamp; temp=None
         try:
+            if priority:
+                # Metadata is only a selection hint, never a trust decision.
+                # Downloaded sets must still pass signature/hash/decryption.
+                if final.exists():
+                    hint=json.loads((final/'manifest.json').read_text())
+                else:
+                    hint=json.loads(run(base+['cat',config['remote']+'/'+stamp+'/manifest.json'],capture_output=True,timeout=30).stdout)
+                hinted_apps=set(hint['applications'])
+                if not hinted_apps or not hinted_apps<=APPS: raise ValueError('Invalid application hint')
+                if hinted_apps<=covered: continue
             if not final.exists():
                 if shutil.disk_usage(CACHE).free < 8*1024**3: raise ValueError('Home disk reserve below 8 GiB')
                 temp=CACHE/('.'+stamp+'.incomplete')
@@ -82,17 +96,21 @@ def mirror():
                 finally: shutil.rmtree(staging)
             manifest=verify(final)
             apps=set(manifest['applications'])
+            covered|=apps
             complete=complete or set(config['protected'])<=apps
             priority=priority or set(config['priority'])<=apps
             marker={'snapshot':stamp,'verified_utc':dt.datetime.now(dt.timezone.utc).isoformat(),'applications':sorted(apps)}
             (final/'.verified.json').write_text(json.dumps(marker)+'\n')
             if complete and priority: break
-        except (ValueError,subprocess.CalledProcessError,FileNotFoundError,KeyError) as error:
+        except (ValueError,subprocess.CalledProcessError,subprocess.TimeoutExpired,FileNotFoundError,KeyError) as error:
+            # Failed, unverified downloads must not accumulate outside the
+            # verified-history budget. Existing good cache sets are untouched.
+            if temp is not None and temp.exists(): shutil.rmtree(temp)
             if isinstance(error,subprocess.CalledProcessError) and b'download_cap_exceeded' in (error.stderr or b''):
                 raise ValueError('Backblaze download cap reached; cached sets retained, download attempts stopped') from error
             print('Rejected recovery set '+stamp+': '+type(error).__name__,flush=True)
     if not priority: raise ValueError('No fresh verified priority recovery set')
-    for old in retention_plan(CACHE,limit_bytes=6*1024**3): shutil.rmtree(old)
+    for old in retention_plan(CACHE,limit_bytes=CACHE_BUDGET,verified_only=True): shutil.rmtree(old)
     print(json.dumps({'priority_available':priority,'full_available':complete}))
 
 def extract_files(snapshot, app, claim, destination):

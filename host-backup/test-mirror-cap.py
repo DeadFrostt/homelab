@@ -17,4 +17,5 @@ class CapHandling(unittest.TestCase):
    with patch.object(recovery,'CONFIG',config),patch.object(recovery,'CACHE',cache),patch.object(recovery,'guard',return_value={'remote':'b2:bucket/prefix','priority':['gatus'],'protected':['gatus']}),patch.object(recovery,'run',side_effect=run):
     with self.assertRaisesRegex(ValueError,'download cap reached'):recovery.mirror()
    self.assertEqual(len(calls),1);self.assertEqual(marker.read_text(),'last-good')
+   self.assertFalse(any(cache.glob('.*.incomplete')))
 if __name__=='__main__':unittest.main()
