@@ -51,7 +51,11 @@ by this guard. Cancelled requests release pending queue positions.
 Foreground Gmail reads take priority over background analysis, and cheap
 label/profile requests take priority over bulk reads. After four foreground
 reads, a waiting background read receives a quota slot so automated rules
-cannot starve during a continuous archive import. `/api/threads` pages are
+cannot starve during a continuous archive import. Requests waiting at least
+10 seconds receive FIFO service regardless of priority, so archive pages also
+make progress under continuous automatic processing. A privacy-safe pacing
+summary logs granted quota units, request counts, maximum queue wait, and
+queue length each minute. `/api/threads` pages are
 capped at five while retaining provider continuation tokens, so Process Past
 Emails continues across smaller pages. Browser disconnects cancel queued
 Gmail work instead of leaving abandoned reads behind. Other providers,

@@ -45,6 +45,7 @@ function createPacer({ now = Date.now, sleep = abortableSleep, unitsPerSecond = 
   let reducedAt = -Infinity;
   let recoveryAt = 0;
   const queue = [];
+  let grantedUnits = 0, grantedRequests = 0, maxWaitMs = 0;
   function remove(entry) {
     const index = queue.indexOf(entry);
     if (index >= 0) queue.splice(index, 1);
@@ -53,6 +54,10 @@ function createPacer({ now = Date.now, sleep = abortableSleep, unitsPerSecond = 
   function next() {
     for (const entry of [...queue]) if (entry.cancelled) remove(entry);
     const best = queue.reduce((candidate, entry) => !candidate || entry.priority < candidate.priority ? entry : candidate, null);
+    // Priority must not indefinitely postpone an archive page behind automation.
+    // Age applies to every class, including cheap reads, so all queued work progresses.
+    const oldest = queue[0];
+    if (oldest && now() - oldest.enqueuedAt >= 10000) return oldest;
     // Preserve cheap UI calls, but reserve background progress during a full import.
     if (best?.priority === 1 && foregroundStreak >= 4) return queue.find(entry => entry.priority === 2) || queue.find(entry => entry.priority === 3) || best;
     return best;
@@ -80,6 +85,9 @@ function createPacer({ now = Date.now, sleep = abortableSleep, unitsPerSecond = 
             recoveryAt = now() + 120000;
           }
           availableAt = Math.max(now(), availableAt, blockedUntil) + Math.ceil(entry.cost * 1000 / effectiveRate);
+          grantedUnits += entry.cost;
+          grantedRequests++;
+          maxWaitMs = Math.max(maxWaitMs, now() - entry.enqueuedAt);
           remove(entry);
           if (entry.priority >= 2) foregroundStreak = 0;
           else if (entry.priority === 1) foregroundStreak++;
@@ -98,7 +106,7 @@ function createPacer({ now = Date.now, sleep = abortableSleep, unitsPerSecond = 
     signal?.throwIfAborted();
     const priority = cost <= 5 ? 0 : context()?.priority ?? 2;
     return new Promise((resolve, reject) => {
-      const entry = { cost, priority, signal, resolve, reject, cancelled: false };
+      const entry = { cost, priority, signal, resolve, reject, enqueuedAt: now(), cancelled: false };
       entry.abort = () => { entry.cancelled = true; reject(signal.reason); };
       signal?.addEventListener('abort', entry.abort, { once: true });
       queue.push(entry);
@@ -107,6 +115,11 @@ function createPacer({ now = Date.now, sleep = abortableSleep, unitsPerSecond = 
   };
   pace.cooldown = milliseconds => {
     blockedUntil = Math.max(blockedUntil, now() + milliseconds);
+  };
+  pace.stats = () => {
+    const result = { grantedUnits, grantedRequests, maxWaitMs, queuedRequests: queue.length, unitsPerSecond: effectiveRate };
+    grantedUnits = 0; grantedRequests = 0; maxWaitMs = 0;
+    return result;
   };
   pace.congestion = () => {
     // A burst of failed subrequests must reduce the rate only once per window.
@@ -328,6 +341,7 @@ function install() {
   const context = () => storage.getStore();
   installRequestContext(storage);
   const pace = createPacer({ context });
+  setInterval(() => console.info('[gmail-guard] ' + JSON.stringify({ event: 'pacing-window', ...pace.stats() })), 60000).unref();
   pace.transport = createGmailTransport(pace, { context });
   pace.mailboxSource = decorateMailboxSource;
   globalThis[SLOT] = pace;

@@ -341,3 +341,23 @@ test('quota feedback slows future traffic once per window and recovers gradually
   await pace(message);
   assert.equal(delays.at(-1), 2560);
 });
+
+
+test('aged archive reads cannot starve behind ongoing higher-priority automation', async () => {
+  let clock = 0, priority = 2, release;
+  let held = false;
+  const order = [];
+  const pace = createPacer({ context: () => ({ priority }), now: () => clock, sleep: async delay => {
+    if (delay && !held) { held = true; await new Promise(resolve => { release = resolve; }); }
+    clock += delay;
+  } });
+  await pace(message);
+  priority = 3;
+  const archive = pace(message).then(() => order.push('archive'));
+  priority = 2;
+  const automation = Array.from({ length: 30 }, (_, i) => pace(message).then(() => order.push('automation-' + i)));
+  release();
+  await Promise.all([archive, ...automation]);
+  assert.ok(order.indexOf('archive') < 15, 'archive must advance before the automation queue drains');
+  assert.equal(pace.stats().grantedRequests, 32);
+});
