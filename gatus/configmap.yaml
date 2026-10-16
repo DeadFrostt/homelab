@@ -34,6 +34,21 @@ data:
 
     endpoints:
       # --- Apps ---
+      - name: Inbox Zero
+        group: Apps
+        url: "http://inbox-zero.inbox-zero.svc.cluster.local:3000/api/health"
+        headers:
+          x-health-api-key: "$INBOX_ZERO_HEALTH_KEY"
+        interval: 60s
+        ui:
+          hide-url: true
+          hide-hostname: true
+        conditions:
+          - "[STATUS] == 200"
+          - "[BODY].database.status == healthy"
+        alerts:
+          - type: webhook
+
       - name: CouchDB
         group: Apps
         url: "http://obsidian-livesync.couch-db.svc.cluster.local:5984"

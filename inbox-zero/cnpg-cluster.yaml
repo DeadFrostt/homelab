@@ -1,0 +1,53 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: inbox-zero-pg
+  namespace: inbox-zero
+spec:
+  instances: 1
+  imageName: ghcr.io/cloudnative-pg/postgresql:16.6@sha256:53be6d727c7b3cf0df2b147f7ce7cdd31d37fd285314294871a4ccc3837b6872
+  inheritedMetadata:
+    annotations:
+      backup.velero.io/backup-volumes-excludes: pgdata
+  primaryUpdateStrategy: unsupervised
+  enableSuperuserAccess: false
+  bootstrap:
+    initdb:
+      database: inboxzero
+      owner: inboxzero
+      secret:
+        name: inbox-zero-pg-app
+  affinity:
+    nodeSelector:
+      kubernetes.io/hostname: yeager
+  storage:
+    size: 10Gi
+    storageClass: local-path
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: '1'
+      memory: 768Mi
+  postgresql:
+    parameters:
+      max_connections: '100'
+      shared_buffers: 128MB
+  backup:
+    retentionPolicy: 14d
+    barmanObjectStore:
+      destinationPath: s3://k3s-backups-yeager/cnpg/inbox-zero
+      endpointURL: https://s3.us-east-005.backblazeb2.com
+      serverName: inbox-zero-pg
+      s3Credentials:
+        accessKeyId:
+          name: cnpg-b2-credentials
+          key: AWS_ACCESS_KEY_ID
+        secretAccessKey:
+          name: cnpg-b2-credentials
+          key: AWS_SECRET_ACCESS_KEY
+      wal:
+        compression: gzip
+      data:
+        compression: gzip

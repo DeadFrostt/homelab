@@ -1,0 +1,19 @@
+name: Inbox Zero image checks
+on:
+  push:
+    branches: [main]
+    paths: ['inbox-zero/**', '.github/workflows/inbox-zero-image.yml']
+  pull_request:
+    paths: ['inbox-zero/**', '.github/workflows/inbox-zero-image.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Test Gmail request pacing
+        run: node --test inbox-zero/image/gmail-pacing.test.cjs
+      - name: Check maintenance scripts
+        run: node --check inbox-zero/scripts/maintenance.mjs

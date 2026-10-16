@@ -50,6 +50,7 @@
   ],
 
   packageRules: [
+    { description: "Inbox Zero is locally built and privately backed up; upgrades follow its runbook", matchPackageNames: ["ghcr.io/deadfrostt/inbox-zero"], enabled: false },
     {
       // Digest-only refreshes on :latest pins are safe to auto-merge.
       matchUpdateTypes: ["digest", "pinDigest"],

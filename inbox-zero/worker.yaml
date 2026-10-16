@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inbox-zero-worker
+  namespace: inbox-zero
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: inbox-zero-worker
+  template:
+    metadata:
+      labels:
+        app: inbox-zero-worker
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: yeager
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 60
+      containers:
+      - name: worker
+        image: ghcr.io/deadfrostt/inbox-zero@sha256:3b773fa5b80bd6157c8d5247c45650eca0360a368124bdbf90890c8de1e5146e
+        imagePullPolicy: Never
+        envFrom: &id001
+        - configMapRef:
+            name: inbox-zero-config
+        - secretRef:
+            name: inbox-zero-env
+        securityContext: &id002
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        command:
+        - /app/docker/scripts/start-worker.sh
+        volumeMounts:
+        - name: gmail-runtime
+          mountPath: /app/gmail-pacing.cjs
+          subPath: gmail-pacing.cjs
+          readOnly: true
+      initContainers:
+      - name: wait-for-web
+        image: ghcr.io/deadfrostt/inbox-zero@sha256:3b773fa5b80bd6157c8d5247c45650eca0360a368124bdbf90890c8de1e5146e
+        imagePullPolicy: Never
+        command:
+        - node
+        - -e
+        - const u=process.env.INTERNAL_API_URL+'/api/health';async function wait(){for(let
+          n=0;n<180;n++){try{const r=await fetch(u,{headers:{'x-health-api-key':process.env.HEALTH_API_KEY}});if(r.ok)process.exit(0)}catch{}await
+          new Promise(r=>setTimeout(r,5000))}process.exit(1)}wait()
+        envFrom: *id001
+        securityContext: *id002
+        resources:
+          requests:
+            cpu: 25m
+            memory: 64Mi
+          limits:
+            cpu: 500m
+            memory: 128Mi
+        volumeMounts:
+        - name: gmail-runtime
+          mountPath: /app/gmail-pacing.cjs
+          subPath: gmail-pacing.cjs
+          readOnly: true
+      volumes:
+      - name: gmail-runtime
+        configMap:
+          name: inbox-zero-gmail-runtime

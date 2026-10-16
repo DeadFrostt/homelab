@@ -5,8 +5,8 @@ import subprocess, tarfile, tempfile, time, signal
 from pathlib import Path
 from retention import retention_plan
 
-APPS = ['gatus', 'vaultwarden', 'actual-budget', 'couch-db', 'zipline', 'infisical', 'authentik', 'matrix', 'mas']
-DATABASES = {'authentik': 'authentik-pg', 'infisical': 'infisical-pg', 'mas': 'mas-pg', 'matrix': 'matrix-pg', 'zipline': 'zipline-pg'}
+APPS = ['gatus', 'vaultwarden', 'actual-budget', 'couch-db', 'zipline', 'infisical', 'authentik', 'matrix', 'mas', 'inbox-zero']
+DATABASES = {'inbox-zero': 'inbox-zero-pg', 'authentik': 'authentik-pg', 'infisical': 'infisical-pg', 'mas': 'mas-pg', 'matrix': 'matrix-pg', 'zipline': 'zipline-pg'}
 FILES = {'gatus': ['gatus-data'], 'vaultwarden': ['vaultwarden-data'], 'actual-budget': ['actual-budget-data'],
  'couch-db': ['couchdb-data', 'couchdb-config'], 'zipline': ['zipline-uploads', 'zipline-public', 'zipline-themes'],
  'authentik': ['authentik-media', 'authentik-certs', 'authentik-templates'], 'matrix': ['matrix-synapse']}
@@ -219,7 +219,7 @@ def main():
     global APPS
     parser=argparse.ArgumentParser();parser.add_argument('--local-only',action='store_true');parser.add_argument('--apps',default='priority');args=parser.parse_args()
     available=set(APPS)
-    APPS=APPS if args.apps=='all' else (['gatus','vaultwarden','actual-budget','couch-db','infisical','authentik'] if args.apps=='priority' else args.apps.split(','))
+    APPS=APPS if args.apps=='all' else (['gatus','vaultwarden','actual-budget','couch-db','infisical','authentik','inbox-zero'] if args.apps=='priority' else args.apps.split(','))
     if not APPS or not set(APPS)<=available: raise ValueError('Unknown protected application')
     os.umask(0o077)
     Path(os.environ.get('DR_PLAIN_ROOT','/run/homelab-dr-plain')).mkdir(parents=True,exist_ok=True,mode=0o700)

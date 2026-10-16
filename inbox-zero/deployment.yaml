@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inbox-zero
+  namespace: inbox-zero
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: inbox-zero
+  template:
+    metadata:
+      labels:
+        app: inbox-zero
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: yeager
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 60
+      containers:
+      - name: web
+        image: ghcr.io/deadfrostt/inbox-zero@sha256:3b773fa5b80bd6157c8d5247c45650eca0360a368124bdbf90890c8de1e5146e
+        imagePullPolicy: Never
+        envFrom:
+        - configMapRef:
+            name: inbox-zero-config
+        - secretRef:
+            name: inbox-zero-env
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        resources:
+          requests:
+            cpu: 100m
+            memory: 512Mi
+          limits:
+            cpu: '2'
+            memory: 3Gi
+        ports:
+        - containerPort: 3000
+          name: http
+        startupProbe:
+          tcpSocket:
+            port: 3000
+          periodSeconds: 5
+          failureThreshold: 120
+        readinessProbe:
+          exec:
+            command:
+            - node
+            - -e
+            - fetch('http://127.0.0.1:3000/api/health',{headers:{'x-health-api-key':process.env.HEALTH_API_KEY}}).then(async
+              r=>{const b=await r.json();process.exit(r.ok&&b.database?.status==='healthy'?0:1)}).catch(()=>process.exit(1))
+          periodSeconds: 15
+          timeoutSeconds: 10
+        livenessProbe:
+          tcpSocket:
+            port: 3000
+          periodSeconds: 30
+          failureThreshold: 3
+        volumeMounts:
+        - name: gmail-runtime
+          mountPath: /app/gmail-pacing.cjs
+          subPath: gmail-pacing.cjs
+          readOnly: true
+      volumes:
+      - name: gmail-runtime
+        configMap:
+          name: inbox-zero-gmail-runtime
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: inbox-zero
+  namespace: inbox-zero
+spec:
+  type: NodePort
+  selector:
+    app: inbox-zero
+  ports:
+  - name: http
+    port: 3000
+    targetPort: 3000
+    nodePort: 30317

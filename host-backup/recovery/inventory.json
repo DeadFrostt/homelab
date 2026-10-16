@@ -10,7 +10,8 @@
     "couch-db",
     "zipline",
     "matrix",
-    "mas"
+    "mas",
+    "inbox-zero"
   ],
   "initial_recovery": [
     "gatus",

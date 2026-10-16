@@ -1,0 +1,207 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: inbox-zero
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: inbox-zero
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-web
+  namespace: inbox-zero
+spec:
+  podSelector:
+    matchLabels:
+      app: inbox-zero
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - ports:
+    - port: 3000
+      protocol: TCP
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          cnpg.io/cluster: inbox-zero-pg
+    ports:
+    - port: 5432
+  - to:
+    - podSelector:
+        matchLabels:
+          app: inbox-zero-redis
+    ports:
+    - port: 6379
+  - to:
+    - podSelector:
+        matchLabels:
+          app: inbox-zero-redis-http
+    ports:
+    - port: 80
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except:
+        - 10.0.0.0/8
+        - 172.16.0.0/12
+        - 192.168.0.0/16
+        - 100.64.0.0/10
+        - 169.254.0.0/16
+        - 127.0.0.0/8
+    ports:
+    - port: 443
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-worker
+  namespace: inbox-zero
+spec:
+  podSelector:
+    matchLabels:
+      app: inbox-zero-worker
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress: []
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app: inbox-zero
+    ports:
+    - port: 3000
+  - to:
+    - podSelector:
+        matchLabels:
+          app: inbox-zero-redis
+    ports:
+    - port: 6379
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-redis
+  namespace: inbox-zero
+spec:
+  podSelector:
+    matchLabels:
+      app: inbox-zero-redis
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: inbox-zero
+    - podSelector:
+        matchLabels:
+          app: inbox-zero-worker
+    - podSelector:
+        matchLabels:
+          app: inbox-zero-redis-http
+    ports:
+    - port: 6379
+  egress: []
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-redis-http
+  namespace: inbox-zero
+spec:
+  podSelector:
+    matchLabels:
+      app: inbox-zero-redis-http
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: inbox-zero
+    ports:
+    - port: 80
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app: inbox-zero-redis
+    ports:
+    - port: 6379
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-cnpg
+  namespace: inbox-zero
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/cluster: inbox-zero-pg
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: inbox-zero
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: cnpg-system
+    - podSelector:
+        matchLabels:
+          cnpg.io/cluster: inbox-zero-pg
+  egress:
+  - {}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-maintenance
+  namespace: inbox-zero
+spec:
+  podSelector:
+    matchLabels:
+      app: inbox-zero-maintenance
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app: inbox-zero
+    ports:
+    - port: 3000

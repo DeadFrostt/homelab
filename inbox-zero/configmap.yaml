@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: inbox-zero-config
+  namespace: inbox-zero
+data:
+  NEXT_PUBLIC_BYPASS_PREMIUM_CHECKS: 'true'
+  NEXT_PUBLIC_EMAIL_SEND_ENABLED: 'false'
+  NEXT_PUBLIC_DELETE_EMAIL_ACTION_ENABLED: 'false'
+  NEXT_PUBLIC_WEBHOOK_ACTION_ENABLED: 'false'
+  NEXT_PUBLIC_INTEGRATION_ACTION_ENABLED: 'false'
+  NEXT_PUBLIC_INTEGRATIONS_ENABLED: 'false'
+  NEXT_PUBLIC_EXTERNAL_API_ENABLED: 'false'
+  NEXT_PUBLIC_MEETING_BRIEFS_ENABLED: 'false'
+  NEXT_PUBLIC_SMART_FILING_ENABLED: 'false'
+  NEXT_PUBLIC_AI_MODEL_SETTINGS_DISABLED: 'true'
+  SENSITIVE_DATA_POLICY_DEFAULT: REDACT
+  NEXT_PUBLIC_SENSITIVE_DATA_POLICY_LOCKED: 'true'
+  NEXT_TELEMETRY_DISABLED: '1'
+  NODE_ENV: production
+  PORT: '3000'
+  HOSTNAME: 0.0.0.0
+  QUEUE_BACKEND: bullmq
+  REDIS_HTTP_URL: http://redis-http:80
+  INTERNAL_API_URL: http://inbox-zero:3000
+  CLI_LLM_ENABLED: 'false'
+  SKIP_DB_MIGRATIONS: 'false'
+  OPENAI_COMPATIBLE_BASE_URL: https://api.lithosai.cloud/v1
+  OPENAI_COMPATIBLE_AUTH_HEADER: authorization
+  OPENAI_COMPATIBLE_MODEL: zai-org/GLM-5.3-Flash-ultra-chat
+  GOOGLE_PUBSUB_TOPIC_NAME: projects/734522807349/topics/inbox-zero-emails
+  TMPDIR: /tmp
+  DEFAULT_LLMS: openai-compatible:zai-org/GLM-5.3-Flash-ultra-chat
+  ECONOMY_LLMS: openai-compatible:zai-org/GLM-5.3-Flash-ultra-chat
+  NANO_LLMS: openai-compatible:zai-org/GLM-5.3-Flash-ultra-chat
+  CHAT_LLMS: openai-compatible:zai-org/GLM-5.3-Flash-ultra-chat
+  DRAFT_LLMS: openai-compatible:zai-org/GLM-5.3-Flash-ultra-chat

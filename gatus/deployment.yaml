@@ -22,6 +22,11 @@ spec:
             - containerPort: 8080
               name: http
           env:
+            - name: INBOX_ZERO_HEALTH_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: gatus-inbox-zero
+                  key: INBOX_ZERO_HEALTH_KEY
             - name: DISCORD_WEBHOOK_URL
               valueFrom:
                 secretKeyRef:

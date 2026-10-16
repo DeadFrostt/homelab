@@ -1,0 +1,12 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: inbox-zero-pg-daily
+  namespace: inbox-zero
+spec:
+  schedule: 0 40 3 * * *
+  immediate: false
+  backupOwnerReference: self
+  cluster:
+    name: inbox-zero-pg
+  method: barmanObjectStore

@@ -1,0 +1,165 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  namespace: inbox-zero
+spec:
+  serviceName: redis
+  replicas: 1
+  selector:
+    matchLabels:
+      app: inbox-zero-redis
+  template:
+    metadata:
+      labels:
+        app: inbox-zero-redis
+      annotations:
+        backup.velero.io/backup-volumes: data
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: yeager
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+        fsGroup: 1001
+      containers:
+      - name: redis
+        image: redis:7-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
+        command:
+        - sh
+        - -c
+        - exec redis-server --appendonly yes --maxmemory 192mb --maxmemory-policy
+          noeviction --requirepass "$REDIS_PASSWORD"
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: inbox-zero-env
+              key: REDIS_PASSWORD
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        ports:
+        - name: redis
+          containerPort: 6379
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli ping
+          periodSeconds: 10
+        livenessProbe:
+          tcpSocket:
+            port: 6379
+          initialDelaySeconds: 20
+          periodSeconds: 20
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      storageClassName: local-path
+      resources:
+        requests:
+          storage: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: inbox-zero
+spec:
+  selector:
+    app: inbox-zero-redis
+  ports:
+  - port: 6379
+    name: redis
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-http
+  namespace: inbox-zero
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: inbox-zero-redis-http
+  template:
+    metadata:
+      labels:
+        app: inbox-zero-redis-http
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: yeager
+      automountServiceAccountToken: false
+      containers:
+      - name: redis-http
+        image: hiett/serverless-redis-http:latest@sha256:5b0bb9239fce53abf87b2018a7a0deb9ec7bd900c5360738fe5fbeeb426f9150
+        env:
+        - name: SRH_MODE
+          value: env
+        - name: SRH_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: inbox-zero-env
+              key: REDIS_HTTP_TOKEN
+        - name: SRH_CONNECTION_STRING
+          valueFrom:
+            secretKeyRef:
+              name: inbox-zero-env
+              key: SRH_CONNECTION_STRING
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        ports:
+        - containerPort: 80
+          name: http
+        readinessProbe:
+          tcpSocket:
+            port: 80
+          periodSeconds: 10
+        livenessProbe:
+          tcpSocket:
+            port: 80
+          initialDelaySeconds: 20
+          periodSeconds: 20
+        resources:
+          requests:
+            cpu: 25m
+            memory: 32Mi
+          limits:
+            cpu: 500m
+            memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-http
+  namespace: inbox-zero
+spec:
+  selector:
+    app: inbox-zero-redis-http
+  ports:
+  - port: 80
+    name: http
