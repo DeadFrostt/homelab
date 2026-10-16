@@ -76,7 +76,9 @@ thousands of older messages to finish downloading. Neither scope clears local
 mail or deletes provider messages. Existing browser caches retain their progress.
 
 Gmail history is listed in pages of 500 records (up to 20 pages per call), then
-at most ten distinct messages are hydrated. Newly added messages are processed
+at most ten distinct messages are hydrated. Live history reads get a quota
+slot before bulk work, with an aged background slot after four live reads to
+preserve import progress. Newly added inbox messages are processed
 before pending label changes, including arrivals received while an earlier
 backlog is still pending. Legacy history-page continuations are re-listed from
 their original history ID so new arrivals are not left behind old label pages.

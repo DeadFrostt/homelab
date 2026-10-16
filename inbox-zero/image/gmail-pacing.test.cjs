@@ -293,7 +293,7 @@ test('the pinned source factory is decorated exactly once and remains idempotent
 });
 
 test('mailbox protocol POST requests receive foreground priority', () => {
-  for (const endpoint of ['scopes', 'bootstrap', 'changes', 'changes/batch', 'hydration', 'search']) {
+  for (const endpoint of ['scopes', 'bootstrap', 'hydration', 'search']) {
     assert.equal(requestDetails('/api/mail/v1/accounts/account/' + endpoint, 'POST').priority, 1);
   }
   assert.equal(requestDetails('/api/cron/automation-jobs', 'GET').priority, 2);
@@ -392,4 +392,23 @@ test('existing snapshot checkpoints migrate without resetting the client commit 
   assert.deepEqual(batch[0].page.from,position);
   assert.equal(JSON.parse(Buffer.from(batch[0].page.to.checkpoint,'base64url')).phase,'delta');
   assert.deepEqual(historyPosition(observed),observed);
+});
+
+
+test('live history requests have priority over bulk reads',()=>{
+  for(const path of ['changes','changes/batch']) assert.equal(requestDetails('/api/mail/v1/accounts/a/'+path,'POST').priority,-1);
+});
+test('live message reads bypass an aged backlog while still reserving background progress',async()=>{
+  let clock=0,priority=3,release,held=false;
+  const order=[];
+  const pace=createPacer({context:()=>({priority}),now:()=>clock,sleep:async delay=>{
+    if(delay&&!held){held=true;await new Promise(resolve=>{release=resolve})}clock+=delay;
+  }});
+  await pace(message);
+  const archive=pace(message).then(()=>order.push('archive'));
+  clock=11000;priority=-1;
+  const live=Array.from({length:8},(_,i)=>pace(message).then(()=>order.push('live-'+i)));
+  release();await Promise.all([archive,...live]);
+  assert.deepEqual(order.slice(0,4),['live-0','live-1','live-2','live-3']);
+  assert.equal(order[4],'archive');
 });

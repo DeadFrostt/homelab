@@ -41,6 +41,7 @@ function createPacer({ now = Date.now, sleep = abortableSleep, unitsPerSecond = 
   let blockedUntil = 0;
   let draining = false;
   let foregroundStreak = 0;
+  let realtimeStreak = 0;
   let effectiveRate = unitsPerSecond;
   let reducedAt = -Infinity;
   let recoveryAt = 0;
@@ -57,6 +58,7 @@ function createPacer({ now = Date.now, sleep = abortableSleep, unitsPerSecond = 
     // Priority must not indefinitely postpone an archive page behind automation.
     // Age applies to every class, including cheap reads, so all queued work progresses.
     const oldest = queue[0];
+    if (best?.priority === -1 && realtimeStreak < 4) return best;
     if (oldest && now() - oldest.enqueuedAt >= 10000) return oldest;
     // Preserve cheap UI calls, but reserve background progress during a full import.
     if (best?.priority === 1 && foregroundStreak >= 4) return queue.find(entry => entry.priority === 2) || queue.find(entry => entry.priority === 3) || best;
@@ -89,6 +91,7 @@ function createPacer({ now = Date.now, sleep = abortableSleep, unitsPerSecond = 
           grantedRequests++;
           maxWaitMs = Math.max(maxWaitMs, now() - entry.enqueuedAt);
           remove(entry);
+          if (entry.priority === -1) realtimeStreak++; else realtimeStreak = 0;
           if (entry.priority >= 2) foregroundStreak = 0;
           else if (entry.priority === 1) foregroundStreak++;
           entry.resolve();
@@ -104,7 +107,7 @@ function createPacer({ now = Date.now, sleep = abortableSleep, unitsPerSecond = 
     if (!cost) return;
     const signal = options.signal || input?.signal;
     signal?.throwIfAborted();
-    const priority = cost <= 5 ? 0 : context()?.priority ?? 2;
+    const priority = context()?.priority === -1 ? -1 : cost <= 5 ? 0 : context()?.priority ?? 2;
     return new Promise((resolve, reject) => {
       const entry = { cost, priority, signal, resolve, reject, enqueuedAt: now(), cancelled: false };
       entry.abort = () => { entry.cancelled = true; reject(signal.reason); };
@@ -447,7 +450,7 @@ function requestDetails(url, method) {
   }
   return {
     url: parsed.pathname + parsed.search,
-    priority: /^\/api\/mail\/v1\/accounts\/[^/]+\/enumeration$/.test(parsed.pathname) ? 3 : (method === 'GET' && !parsed.pathname.startsWith('/api/cron/')) || /^\/api\/mail\/v1\/accounts\/[^/]+\/(?:scopes|bootstrap|enumeration|changes(?:\/batch)?|hydration|search|assistant-state)$/.test(parsed.pathname) ? 1 : 2,
+    priority: /^\/api\/mail\/v1\/accounts\/[^/]+\/changes(?:\/batch)?$/.test(parsed.pathname) ? -1 : /^\/api\/mail\/v1\/accounts\/[^/]+\/enumeration$/.test(parsed.pathname) ? 3 : (method === 'GET' && !parsed.pathname.startsWith('/api/cron/')) || /^\/api\/mail\/v1\/accounts\/[^/]+\/(?:scopes|bootstrap|enumeration|changes(?:\/batch)?|hydration|search|assistant-state)$/.test(parsed.pathname) ? 1 : 2,
   };
 }
 function installRequestContext(storage) {
