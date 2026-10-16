@@ -223,3 +223,78 @@ test('HTTP request context preserves pagination and aborts after a premature res
     assert.equal(signal.aborted, true);
   } finally { restore(); }
 });
+
+const { decorateMailboxSource, patchRuntimeSource, MAILBOX_FACTORY, MAILBOX_GUARDED, LIVE_SCOPE } = require('./gmail-pacing.cjs');
+function fakeMailboxSource() {
+  const calls = [];
+  const source = {
+    describe: async () => ({ status: 'ok', value: { maxPageSize: 50, maxHydrationBatch: 20 } }),
+    discoverScopes: async () => ({ status: 'ok', value: { scopes: [{ id: 'primary', kind: 'account', folderId: null }], nextPage: null } }),
+    beginBootstrap: async input => {
+      const position = { streamId: input.scope.id, generation: 'generation', checkpoint: 'history-start' };
+      return { status: 'ok', value: { bootstrapId: 'mailbox', catchUpFrom: position, enumerationToken: JSON.stringify({ scopeId: input.scope.id, catchUpFrom: position }) } };
+    },
+    enumerate: async input => { calls.push(input); return { status: 'ok', value: { changes: ['archive-page'], nextPage: 'archive-continuation' } }; },
+    readChanges: async input => { calls.push(input); return { status: 'page', page: { from: input.position, changes: ['new-message'] } }; },
+  };
+  return { source, calls };
+}
+
+test('live history starts before the archive is complete and uses an independent checkpoint', async () => {
+  const { source, calls } = fakeMailboxSource();
+  const guarded = decorateMailboxSource(source, { name: 'google' });
+  const discovered = await guarded.discoverScopes({});
+  assert.deepEqual(discovered.value.scopes.map(s => [s.id, s.priority]), [[LIVE_SCOPE, 'high'], ['primary', 'low']]);
+  const boot = await guarded.beginBootstrap({ scope: discovered.value.scopes[0] });
+  const live = await guarded.enumerate({ bootstrapId: boot.value.bootstrapId, page: boot.value.enumerationToken, pageSize: 50 });
+  assert.equal(live.value.nextPage, null);
+  assert.equal(live.value.catchUpFrom.streamId, LIVE_SCOPE);
+  assert.equal(live.value.catchUpFrom.checkpoint, 'history-start');
+  assert.deepEqual(live.value.changes, []);
+  assert.equal(calls.length, 0, 'live initialization must not fetch the archive');
+  const updates = await guarded.readChanges({ position: live.value.catchUpFrom, pageSize: 50 });
+  assert.deepEqual(updates.page.changes, ['new-message']);
+  assert.equal(calls[0].pageSize, 10);
+  const archive = await guarded.enumerate({ page: '{"scopeId":"primary","pageToken":"keep-token"}', pageSize: 50 });
+  assert.equal(calls[1].pageSize, 10);
+  assert.equal(JSON.parse(calls[1].page).pageToken, 'keep-token');
+  assert.equal(archive.value.nextPage, 'archive-continuation');
+});
+
+test('live history does not initialize with a missing checkpoint or hide authentication failure', async () => {
+  const { source } = fakeMailboxSource();
+  source.beginBootstrap = async () => ({ status: 'ok', value: { catchUpFrom: { checkpoint: null } } });
+  const guarded = decorateMailboxSource(source, { name: 'google' });
+  assert.equal((await guarded.beginBootstrap({ scope: { id: LIVE_SCOPE } })).status, 'paused');
+  assert.equal((await guarded.enumerate({ page: JSON.stringify({ scopeId: LIVE_SCOPE }), pageSize: 50 })).status, 'paused');
+  source.beginBootstrap = async () => ({ status: 'blocked_auth' });
+  assert.equal((await guarded.beginBootstrap({ scope: { id: LIVE_SCOPE } })).status, 'blocked_auth');
+});
+
+test('Microsoft provider sync is preserved', () => {
+  const { source } = fakeMailboxSource();
+  assert.equal(decorateMailboxSource(source, { name: 'microsoft' }), source);
+});
+
+test('the pinned source factory is decorated exactly once and remains idempotent', () => {
+  const vm = require('node:vm');
+  const factory = MAILBOX_FACTORY + 'I={accountId:l,provider:s.name};return I}];';
+  const patched = patchRuntimeSource(factory);
+  assert.ok(patched.includes(MAILBOX_GUARDED));
+  assert.equal(patchRuntimeSource(patched), patched);
+  const sandbox = {};
+  let wrapped = 0;
+  sandbox[Symbol.for('inboxzero.gmailPacing')] = { mailboxSource: source => { wrapped++; return { ...source, guarded: true }; } };
+  const exported = vm.runInNewContext(patched, sandbox);
+  const value = exported[2]({ accountId: 'account', provider: { name: 'google' } });
+  assert.equal(value.accountId, 'account');
+  assert.equal(value.guarded, true);
+  assert.equal(wrapped, 1);
+});
+
+test('mailbox protocol POST requests receive foreground priority', () => {
+  for (const endpoint of ['scopes', 'bootstrap', 'enumeration', 'changes', 'changes/batch', 'hydration', 'search']) {
+    assert.equal(requestDetails('/api/mail/v1/accounts/account/' + endpoint, 'POST').priority, 1);
+  }
+  assert.equal(requestDetails('/api/cron/automation-jobs', 'GET').priority, 2);
+});

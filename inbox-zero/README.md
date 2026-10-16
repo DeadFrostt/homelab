@@ -53,6 +53,15 @@ Emails continues across smaller pages. Browser disconnects cancel queued
 Gmail work instead of leaving abandoned reads behind. Other providers,
 including Lithos, are unaffected.
 
+The browser mailbox protocol uses POST requests; these receive foreground
+priority too. Its source is decorated before modules load to bound enumeration,
+search, and change pages at 10 messages. Google scope `primary` continues the
+complete archive scan with its original continuation tokens. A separate
+`primary-live` history stream initializes from the current Gmail checkpoint
+without re-enumerating the archive, so new-mail catch-up does not wait for
+thousands of older messages to finish downloading. Neither scope clears local
+mail or deletes provider messages. Existing browser caches retain their progress.
+
 Keep **one web replica** and the `Recreate` strategy: this is a single-process
 budget for one mailbox. Scaling requires a distributed per-account limiter.
 The pacer is mounted from a hashed ConfigMap so changes trigger a rollout.

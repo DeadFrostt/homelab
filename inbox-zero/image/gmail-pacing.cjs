@@ -117,23 +117,70 @@ const ADAPTER_MANAGED = ADAPTER_PLAIN.replace('await t(e.url,r)', 'await globalT
 function patchAdapterSource(source) {
   return source.replaceAll(ADAPTER_OLD, ADAPTER_MANAGED).replaceAll(ADAPTER_PLAIN, ADAPTER_MANAGED);
 }
+const MAILBOX_FACTORY = '["createEmailProviderMailboxSource",0,function(e){let{provider:s,accountId:l}=e,m="microsoft"===s.name?20:50,';
+const MAILBOX_GUARDED = '["createEmailProviderMailboxSource",0,function inboxzeroMailboxSource(e){if(!e.__inboxzeroSyncGuard)return globalThis[Symbol.for("inboxzero.gmailPacing")].mailboxSource(inboxzeroMailboxSource({...e,__inboxzeroSyncGuard:true}),e.provider);let{provider:s,accountId:l}=e,m="microsoft"===s.name?20:50,';
+function patchRuntimeSource(source) {
+  return patchAdapterSource(source).replaceAll(MAILBOX_FACTORY, MAILBOX_GUARDED);
+}
+const LIVE_SCOPE = 'primary-live';
+function decorateMailboxSource(source, provider) {
+  if (provider.name !== 'google') return source;
+  const page = input => ({ ...input, pageSize: Math.min(input.pageSize || 10, 10) });
+  return {
+    ...source,
+    async describe(input) {
+      const result = await source.describe(input);
+      return result.status !== 'ok' ? result : { ...result, value: { ...result.value, maxPageSize: 10, maxHydrationBatch: 10 } };
+    },
+    async discoverScopes(input) {
+      const result = await source.discoverScopes(input);
+      if (result.status !== 'ok') return result;
+      return { ...result, value: { ...result.value, scopes: [
+        { id: LIVE_SCOPE, kind: 'account', folderId: null, priority: 'high' },
+        ...result.value.scopes.filter(scope => scope.id !== LIVE_SCOPE).map(scope => ({ ...scope, priority: 'low' })),
+      ] } };
+    },
+    async beginBootstrap(input) {
+      const result = await source.beginBootstrap(input);
+      if (input.scope.id === LIVE_SCOPE && result.status === 'ok' && !result.value.catchUpFrom?.checkpoint) {
+        return { status: 'paused', reason: 'unavailable', retryAfterMs: 5000 };
+      }
+      return result;
+    },
+    async enumerate(input) {
+      let token;
+      try { token = JSON.parse(input.page); } catch { return source.enumerate(page(input)); }
+      if (token.scopeId === LIVE_SCOPE) {
+        if (!token.catchUpFrom?.checkpoint) return { status: 'paused', reason: 'unavailable', retryAfterMs: 5000 };
+        return { status: 'ok', value: { bootstrapId: input.bootstrapId, scopeId: LIVE_SCOPE,
+          changes: [], requiredHydration: [], bodies: [], nextPage: null, catchUpFrom: token.catchUpFrom } };
+      }
+      return source.enumerate(page(input));
+    },
+    readChanges: input => source.readChanges(page(input)),
+    ...(source.readChangesBatch ? { readChangesBatch: input => source.readChangesBatch(page(input)) } : {}),
+    ...(source.search ? { search: input => source.search(page(input)) } : {}),
+  };
+}
 function patchBundledTransport() {
   const fs = require('node:fs');
   const directory = '/app/apps/web/.next/server/chunks';
   let matched = 0;
+  let mailboxMatched = 0;
   for (const file of fs.readdirSync(directory)) {
     if (!file.endsWith('.js')) continue;
     const target = directory + '/' + file;
     const source = fs.readFileSync(target, 'utf8');
-    const patched = patchAdapterSource(source);
+    const patched = patchRuntimeSource(source);
     if (patched.includes(ADAPTER_MANAGED)) matched++;
+    if (patched.includes(MAILBOX_GUARDED)) mailboxMatched++;
     if (patched !== source) {
       const temporary = target + '.gmail-guard-' + process.pid;
       fs.writeFileSync(temporary, patched);
       fs.renameSync(temporary, target);
     }
   }
-  if (!matched) throw new Error('No compatible Gmail adapter; refusing to start without quota protection');
+  if (!matched || !mailboxMatched) throw new Error('No compatible Gmail adapter/mailbox source; refusing to start without sync protection');
 }
 
 function boundaryFrom(headers) {
@@ -225,7 +272,7 @@ function requestDetails(url, method) {
   }
   return {
     url: parsed.pathname + parsed.search,
-    priority: method === 'GET' && !parsed.pathname.startsWith('/api/cron/') ? 1 : 2,
+    priority: (method === 'GET' && !parsed.pathname.startsWith('/api/cron/')) || /^\/api\/mail\/v1\/accounts\/[^/]+\/(?:scopes|bootstrap|enumeration|changes(?:\/batch)?|hydration|search|assistant-state)$/.test(parsed.pathname) ? 1 : 2,
   };
 }
 function installRequestContext(storage) {
@@ -259,11 +306,12 @@ function install() {
   installRequestContext(storage);
   const pace = createPacer({ context });
   pace.transport = createGmailTransport(pace, { context });
+  pace.mailboxSource = decorateMailboxSource;
   globalThis[SLOT] = pace;
   patchBundledTransport();
   const originalFetch = globalThis.fetch.bind(globalThis);
   globalThis.fetch = (input, options) => pace.transport(originalFetch, input, options);
 }
 
-module.exports = { requestCost, createPacer, createGmailTransport, patchAdapterSource, ADAPTER_PLAIN, ADAPTER_OLD, ADAPTER_MANAGED, requestDetails, installRequestContext, install };
+module.exports = { requestCost, createPacer, createGmailTransport, patchAdapterSource, ADAPTER_PLAIN, ADAPTER_OLD, ADAPTER_MANAGED, requestDetails, installRequestContext, decorateMailboxSource, patchRuntimeSource, MAILBOX_FACTORY, MAILBOX_GUARDED, LIVE_SCOPE, install };
 if (process.env.INBOXZERO_GMAIL_PACING === 'true') install();
