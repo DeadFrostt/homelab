@@ -234,3 +234,23 @@ five threads in about 11 seconds and finished within 40 seconds; all five rule
 executions were APPLIED. No quota errors occurred during this verification.
 This verifies a small run, not completion of either full archive or a sustained
 large backfill under the project's effective quota.
+
+### Stalled inbox follow-up (2026-10-16)
+
+Two independent defects contributed to a mailbox stopping at 66 locally cached
+conversations: archive requests could starve behind sustained higher-priority
+traffic, and the upstream bootstrap baseline returned a snapshot cursor that
+made the added live stream enumerate old mail again. Queue aging now guarantees
+continued archive service. Google bootstrap baselines use history/delta cursors;
+existing snapshot checkpoints preserve their original history ID and migrate
+on the next read, retaining the original client commit position and cached mail.
+
+Verification: 33 regression tests and all deployment CI checks passed. Against
+real Gmail, a legacy snapshot position returned a delta checkpoint with its
+client commit position preserved, roundComplete true, and zero pending changes.
+A fresh browser received successive 10-message archive pages with live delta
+reads, no waiting banner, and increasing local counts. The owner refreshed the
+affected existing browser and confirmed its count was increasing beyond 66.
+Argo reported Synced/Healthy, polling jobs succeeded, and no Gmail quota errors
+were recorded in the final six-minute observation. Full archive import remains
+incremental; this is not a claim that all older mail is already cached.
