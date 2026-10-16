@@ -3,7 +3,7 @@
 // Single-process pacing for this single-mailbox pilot. The worker forwards
 // mailbox work to the web process. Keep below Gmail's 6,000 units/minute.
 const SLOT = Symbol.for('inboxzero.gmailPacing');
-const RATE = 50; // 3,000 units/minute, reserving headroom for other activity.
+const RATE = 25; // 1,500 units/minute; tolerate lower effective Gmail limits.
 
 function requestCost(input, options = {}) {
   let url;
@@ -38,6 +38,7 @@ function requestCost(input, options = {}) {
 
 function createPacer({ now = Date.now, sleep = abortableSleep, unitsPerSecond = RATE } = {}) {
   let availableAt = 0;
+  let blockedUntil = 0;
   let draining = false;
   const queue = [];
   async function drain() {
@@ -48,9 +49,14 @@ function createPacer({ now = Date.now, sleep = abortableSleep, unitsPerSecond = 
         const entry = queue[0];
         if (entry.cancelled) { queue.shift(); continue; }
         try {
-          await sleep(Math.max(0, availableAt - now()), entry.signal);
+          // A response can extend the cooldown while this entry is sleeping.
+          let deadline;
+          do {
+            deadline = Math.max(availableAt, blockedUntil);
+            await sleep(Math.max(0, deadline - now()), entry.signal);
+          } while (blockedUntil > deadline);
           entry.signal?.throwIfAborted();
-          availableAt = Math.max(now(), availableAt) + Math.ceil(entry.cost * 1000 / unitsPerSecond);
+          availableAt = Math.max(now(), availableAt, blockedUntil) + Math.ceil(entry.cost * 1000 / unitsPerSecond);
           entry.signal?.removeEventListener('abort', entry.abort);
           queue.shift();
           entry.resolve();
@@ -62,7 +68,7 @@ function createPacer({ now = Date.now, sleep = abortableSleep, unitsPerSecond = 
       }
     } finally { draining = false; }
   }
-  return async function pace(input, options = {}) {
+  const pace = async function (input, options = {}) {
     const cost = requestCost(input, options);
     if (!cost) return;
     const signal = options.signal || input?.signal;
@@ -75,6 +81,10 @@ function createPacer({ now = Date.now, sleep = abortableSleep, unitsPerSecond = 
       void drain();
     });
   };
+  pace.cooldown = milliseconds => {
+    blockedUntil = Math.max(blockedUntil, now() + milliseconds);
+  };
+  return pace;
 }
 
 function abortableSleep(delay, signal) {
@@ -87,19 +97,118 @@ function abortableSleep(delay, signal) {
   });
 }
 
+// Gaxios bundles node-fetch, so wrapping global fetch alone misses SDK errors.
+// Replace the existing pre-request hook with a complete shared transport wrapper.
+const ADAPTER_BODY = 'let t=e.fetchImplementation||this.defaults.fetchImplementation||await A.#A(),r={...e};delete r.data;let s=await t(e.url,r),n=await this.getResponseData(e,s);';
+const ADAPTER_PLAIN = 'async _defaultAdapter(e){' + ADAPTER_BODY;
+const ADAPTER_OLD = 'async _defaultAdapter(e){await globalThis[Symbol.for("inboxzero.gmailPacing")]?.(e.url,e);' + ADAPTER_BODY;
+const ADAPTER_MANAGED = ADAPTER_PLAIN.replace('await t(e.url,r)', 'await globalThis[Symbol.for("inboxzero.gmailPacing")].transport(t,e.url,r)');
+function patchAdapterSource(source) {
+  return source.replaceAll(ADAPTER_OLD, ADAPTER_MANAGED).replaceAll(ADAPTER_PLAIN, ADAPTER_MANAGED);
+}
+function patchBundledTransport() {
+  const fs = require('node:fs');
+  const directory = '/app/apps/web/.next/server/chunks';
+  let matched = 0;
+  for (const file of fs.readdirSync(directory)) {
+    if (!file.endsWith('.js')) continue;
+    const target = directory + '/' + file;
+    const source = fs.readFileSync(target, 'utf8');
+    const patched = patchAdapterSource(source);
+    if (patched.includes(ADAPTER_MANAGED)) matched++;
+    if (patched !== source) {
+      const temporary = target + '.gmail-guard-' + process.pid;
+      fs.writeFileSync(temporary, patched);
+      fs.renameSync(temporary, target);
+    }
+  }
+  if (!matched) throw new Error('No compatible Gmail adapter; refusing to start without quota protection');
+}
+
+function boundaryFrom(headers) {
+  return /boundary=(?:"([^"\r\n]+)"|([^;\s]+))/i.exec(headers.get('content-type') || '')?.slice(1).find(Boolean);
+}
+function isQuotaError(status, data) {
+  return status === 429 || (status === 403 &&
+    (data?.error?.errors || []).some(error => ['rateLimitExceeded', 'userRateLimitExceeded'].includes(error.reason)));
+}
+function multipartParts(text, boundary) {
+  return text.split('--' + boundary).slice(1, -1);
+}
+function partRateLimited(part) {
+  const status = Number(/HTTP\/\d(?:\.\d)?\s+(\d+)/.exec(part)?.[1]);
+  if (status !== 403 && status !== 429) return false;
+  try { return isQuotaError(status, JSON.parse(part.slice(part.indexOf('{')).trim())); }
+  catch { return status === 429; }
+}
+
+function createGmailTransport(pace, { cooldownMs = 65000, log = console.info } = {}) {
+  function quotaCooldown(response) {
+    const retryAfter = response.headers.get('retry-after');
+    const retryMs = retryAfter && /^\d+$/.test(retryAfter) ? Number(retryAfter) * 1000 : Math.max(0, Date.parse(retryAfter) - Date.now()) || 0;
+    const delay = Math.max(cooldownMs, retryMs);
+    pace.cooldown(delay);
+    log('[gmail-guard] ' + JSON.stringify({ event: 'quota-cooldown', seconds: Math.ceil(delay / 1000) }));
+  }
+  async function limited(response) {
+    const type = response.headers.get('content-type') || '';
+    if (/multipart\/mixed/i.test(type)) {
+      const boundary = boundaryFrom(response.headers);
+      return boundary ? multipartParts(await response.clone().text(), boundary).some(partRateLimited) : false;
+    }
+    if (![403, 429].includes(response.status)) return false;
+    let data;
+    try { data = await response.clone().json(); } catch {}
+    return isQuotaError(response.status, data);
+  }
+  async function send(fetchImplementation, input, options, retrySafe) {
+    for (let attempt = 0; ; attempt++) {
+      await pace(input, options);
+      const response = await fetchImplementation(input, options);
+      if (!await limited(response)) return response;
+      quotaCooldown(response);
+      if (!retrySafe || attempt >= 1) return response;
+      // Retrying waits on the same cooldown as all other mailbox requests.
+      await response.body?.cancel?.().catch(() => {});
+    }
+  }
+  return async function transport(fetchImplementation, input, options = {}) {
+    if (!requestCost(input, options)) return fetchImplementation(input, options);
+    const url = new URL(input?.url || input);
+    const method = String(options.method || input?.method || 'GET').toUpperCase();
+    if (url.pathname !== '/batch/gmail/v1') return send(fetchImplementation, input, options, method === 'GET');
+    const headers = new Headers(options.headers || input?.headers);
+    const boundary = boundaryFrom(headers);
+    const parts = boundary ? multipartParts(options.body, boundary) : [];
+    // Only split/retry the app's read-only batch format. Never replay writes.
+    if (!parts.length || parts.some(part => !/\nGET \/gmail\/v1\//.test(part))) return send(fetchImplementation, input, options, false);
+    const responses = [];
+    for (let offset = 0; offset < parts.length; offset += 10) {
+      const chunk = parts.slice(offset, offset + 10);
+      const body = chunk.map(part => '--' + boundary + part).join('') + '--' + boundary + '--';
+      const response = await send(fetchImplementation, input, { ...options, body }, true);
+      if (!response.ok) return response;
+      const responseBoundary = boundaryFrom(response.headers);
+      if (!responseBoundary) return response;
+      responses.push(...multipartParts(await response.text(), responseBoundary));
+    }
+    const mergedBoundary = 'inboxzero_gmail_guard';
+    log('[gmail-guard] ' + JSON.stringify({ event: 'read-batch-complete', requests: parts.length, batches: Math.ceil(parts.length / 10) }));
+    return new Response(responses.map(part => '--' + mergedBoundary + part).join('') + '--' + mergedBoundary + '--\r\n', {
+      status: 200, headers: { 'content-type': 'multipart/mixed; boundary=' + mergedBoundary },
+    });
+  };
+}
+
 function install() {
   if (globalThis[SLOT]) return;
   const pace = createPacer();
+  pace.transport = createGmailTransport(pace);
   globalThis[SLOT] = pace;
-  // Direct fetch is used by the Gmail multipart batch implementation.
-  // The bundled Gaxios transport is patched separately to share this pacer.
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = async function (input, options) {
-    await pace(input, options);
-    return originalFetch.call(this, input, options);
-  };
-
+  patchBundledTransport();
+  const originalFetch = globalThis.fetch.bind(globalThis);
+  globalThis.fetch = (input, options) => pace.transport(originalFetch, input, options);
 }
 
-module.exports = { requestCost, createPacer, install };
+module.exports = { requestCost, createPacer, createGmailTransport, patchAdapterSource, ADAPTER_PLAIN, ADAPTER_OLD, ADAPTER_MANAGED, install };
 if (process.env.INBOXZERO_GMAIL_PACING === 'true') install();

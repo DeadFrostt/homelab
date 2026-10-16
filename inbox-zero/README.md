@@ -38,17 +38,23 @@ not refresh automatically.
 ## Gmail request pacing
 
 The upstream app can exhaust Gmail's per-user minute budget during catch-up.
-The image patches its bundled Gaxios adapter to use a shared in-process pacer;
+The image patches its bundled Gaxios adapter to use a shared in-process transport;
 the runtime also covers direct multipart Gmail batch requests. It accounts for
-subrequest quota costs and spaces work at **3,000 units/minute**. Cancelled
-requests release pending queue positions. Other providers, including Lithos,
-are unaffected.
+subrequest quota costs and spaces work at **1,500 units/minute**, splitting
+read-only batches into at most **10 requests** each to avoid large bursts.
+Quota errors, including errors inside HTTP-200 multipart responses, pause all
+Gmail work for at least **65 seconds** (or longer Retry-After). Read-only
+requests retry once through that shared cooldown; writes are never replayed
+by this guard. Cancelled requests release pending queue positions.
+Other providers, including Lithos, are unaffected.
 
 Keep **one web replica** and the `Recreate` strategy: this is a single-process
 budget for one mailbox. Scaling requires a distributed per-account limiter.
 The pacer is mounted from a hashed ConfigMap so changes trigger a rollout.
-The exact bundled adapter signature is checked at build time; upstream upgrades
-must revalidate the patch and tests.
+The preload upgrades the pinned image's adapter hook before server modules load;
+the writable compiled chunks are owned by UID 1001. The exact adapter signature
+is checked at build and startup, failing closed if incompatible. Upstream
+upgrades must revalidate the patch and tests.
 
 ## Image lifecycle
 
