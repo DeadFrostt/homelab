@@ -284,7 +284,7 @@ test('the pinned source factory is decorated exactly once and remains idempotent
   assert.equal(patchRuntimeSource(patched), patched);
   const sandbox = {};
   let wrapped = 0;
-  sandbox[Symbol.for('inboxzero.gmailPacing')] = { mailboxSource: source => { wrapped++; return { ...source, guarded: true }; } };
+  sandbox[Symbol.for('inboxzero.gmailPacing')] = { mailboxProvider: provider => provider, mailboxSource: source => { wrapped++; return { ...source, guarded: true }; } };
   const exported = vm.runInNewContext(patched, sandbox);
   const value = exported[2]({ accountId: 'account', provider: { name: 'google' } });
   assert.equal(value.accountId, 'account');

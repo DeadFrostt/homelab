@@ -75,6 +75,16 @@ commit. This avoids a second archive scan, so new-mail catch-up does not wait fo
 thousands of older messages to finish downloading. Neither scope clears local
 mail or deletes provider messages. Existing browser caches retain their progress.
 
+Gmail history is listed in pages of 500 records (up to 20 pages per call), then
+at most ten distinct messages are hydrated. Newly added messages are processed
+before pending label changes, including arrivals received while an earlier
+backlog is still pending. Legacy history-page continuations are re-listed from
+their original history ID so new arrivals are not left behind old label pages.
+Pending IDs are scoped to the authenticated mailbox in a bounded, expiring
+in-process cache. The opaque cursor also retains the original replay baseline;
+cache eviction or an app restart replays history instead of losing pending
+updates. Other providers and archive continuation tokens retain their behavior.
+
 Keep **one web replica** and the `Recreate` strategy: this is a single-process
 budget shared by linked mailboxes. Scaling requires a distributed per-account limiter.
 The pacer is mounted from a hashed ConfigMap so changes trigger a rollout.

@@ -153,11 +153,128 @@ function patchAdapterSource(source) {
   return source.replaceAll(ADAPTER_OLD, ADAPTER_MANAGED).replaceAll(ADAPTER_PLAIN, ADAPTER_MANAGED);
 }
 const MAILBOX_FACTORY = '["createEmailProviderMailboxSource",0,function(e){let{provider:s,accountId:l}=e,m="microsoft"===s.name?20:50,';
-const MAILBOX_GUARDED = '["createEmailProviderMailboxSource",0,function inboxzeroMailboxSource(e){if(!e.__inboxzeroSyncGuard)return globalThis[Symbol.for("inboxzero.gmailPacing")].mailboxSource(inboxzeroMailboxSource({...e,__inboxzeroSyncGuard:true}),e.provider);let{provider:s,accountId:l}=e,m="microsoft"===s.name?20:50,';
+const MAILBOX_GUARDED_OLD = '["createEmailProviderMailboxSource",0,function inboxzeroMailboxSource(e){if(!e.__inboxzeroSyncGuard)return globalThis[Symbol.for("inboxzero.gmailPacing")].mailboxSource(inboxzeroMailboxSource({...e,__inboxzeroSyncGuard:true}),e.provider);let{provider:s,accountId:l}=e,m="microsoft"===s.name?20:50,';
+const MAILBOX_GUARDED = '["createEmailProviderMailboxSource",0,function inboxzeroMailboxSource(e){if(!e.__inboxzeroSyncGuard)return globalThis[Symbol.for("inboxzero.gmailPacing")].mailboxSource(inboxzeroMailboxSource({...e,provider:globalThis[Symbol.for("inboxzero.gmailPacing")].mailboxProvider(e.provider,e.accountId),__inboxzeroSyncGuard:true}),e.provider);let{provider:s,accountId:l}=e,m="microsoft"===s.name?20:50,';
 function patchRuntimeSource(source) {
-  return patchAdapterSource(source).replaceAll(MAILBOX_FACTORY, MAILBOX_GUARDED);
+  return patchAdapterSource(source).replaceAll(MAILBOX_GUARDED_OLD, MAILBOX_GUARDED).replaceAll(MAILBOX_FACTORY, MAILBOX_GUARDED);
 }
 const LIVE_SCOPE = 'primary-live';
+// Read history cheaply in large pages, but hydrate at most ten messages per call.
+// New arrivals take priority over pending label updates. Cursors retain a replay
+// baseline so process restarts/eviction replay changes rather than discard them.
+function createHistoryPager({ now = Date.now, ttlMs = 900000, maxStates = 128, maxPendingIds = 100000 } = {}) {
+  const states = new Map();
+  function save(accountId, state) {
+    for (const [key, item] of states) if (item.expires <= now()) states.delete(key);
+    const size = state.upserts.length + state.deleted.length;
+    if (size > maxPendingIds) throw new Error('Gmail history pending window is too large');
+    let total = [...states.values()].reduce((n, item) => n + item.size, 0);
+    while (states.size && (states.size >= maxStates || total + size > maxPendingIds)) {
+      const key = states.keys().next().value;
+      total -= states.get(key).size; states.delete(key);
+    }
+    const key = require('node:crypto').randomUUID();
+    states.set(accountId + ':' + key, { ...state, size, expires: now() + ttlMs });
+    return key;
+  }
+  return async function read(provider, accountId, input) {
+    let cursor;
+    try { cursor = JSON.parse(Buffer.from(input.cursor, 'base64url').toString('utf8')); } catch {}
+    if (cursor?.version !== 1 || cursor.provider !== 'google' || cursor.phase !== 'delta' ||
+        !/^\d+$/.test(cursor.historyId) || !Number.isFinite(Date.parse(cursor.after))) {
+      return provider.getMailboxSyncPage(input);
+    }
+    const cached = cursor.inboxzeroPending && states.get(accountId + ':' + cursor.inboxzeroPending);
+    const pending = cached?.expires > now() ? cached : null;
+    const replayFrom = /^\d+$/.test(cursor.inboxzeroReplayFrom) ? cursor.inboxzeroReplayFrom : cursor.historyId;
+    const recovering = Boolean(cursor.inboxzeroPending && !pending);
+    const start = recovering ? replayFrom : cursor.historyId;
+    // Legacy continuation pages may contain thousands of label changes ahead
+    // of new mail. Re-list that window, then prioritize its arrival IDs.
+    let pageToken = cursor.inboxzeroHistory === 1 && !recovering ? cursor.pageToken : undefined;
+    let tail = start;
+    const inboxArrivals = new Set(), arrived = new Set(), changed = new Set(), deleted = new Set();
+    for (let pages = 0; pages < 20; pages++) {
+      let data;
+      try { ({ data } = await provider.client.users.history.list({ userId: 'me', startHistoryId: start,
+        historyTypes: ['messageAdded', 'messageDeleted', 'labelAdded', 'labelRemoved'], maxResults: 500,
+        ...(pageToken ? { pageToken } : {}) })); }
+      catch (error) {
+        if (Number(error.response?.status || error.status || error.code) === 404) error.inboxzeroHistoryExpired = true;
+        throw error;
+      }
+      for (const record of data.history || []) {
+        for (const item of record.messagesAdded || []) if (item.message?.id) {
+          arrived.add(item.message.id);
+          if (item.message.labelIds?.includes('INBOX') && !item.message.labelIds.includes('DRAFT')) inboxArrivals.add(item.message.id);
+        }
+        for (const item of [...record.messagesAdded || [], ...record.labelsAdded || [], ...record.labelsRemoved || []]) {
+          if (item.message?.id) changed.add(item.message.id);
+        }
+        for (const message of record.messages || []) if (message.id) changed.add(message.id);
+        for (const item of record.messagesDeleted || []) if (item.message?.id) deleted.add(item.message.id);
+      }
+      pageToken = data.nextPageToken;
+      tail = pageToken ? start : data.historyId || start;
+      if (!pageToken) break;
+    }
+    const deletions = [...new Set([...(pending?.deleted || []), ...deleted])];
+    const deletedSet = new Set(deletions);
+    const upserts = [...new Set([...inboxArrivals].reverse().concat([...arrived].reverse(), pending?.upserts || [], [...changed]))].filter(id => !deletedSet.has(id));
+    const count = Math.min(Math.max(input.limit || 10, 1), 10);
+    const ids = upserts.slice(0, count);
+    const removed = deletions.slice(0, count);
+    const fetched = ids.length ? await provider.getMessagesBatch(ids) : [];
+    const messages = new Map();
+    for (const message of fetched) {
+      if (!ids.includes(message.id) || messages.has(message.id)) throw new Error('Unexpected Gmail history message ID');
+      messages.set(message.id, message);
+    }
+    // Batch helpers can omit failures. Only a confirmed 404 is a deletion.
+    for (const id of ids) if (!messages.has(id)) {
+      try {
+        const message = await provider.getMessage(id);
+        if (message.id !== id) throw new Error('Unexpected Gmail history message ID');
+        messages.set(id, message);
+      } catch (error) {
+        if (Number(error.response?.status || error.status || error.code) !== 404) throw error;
+        removed.push(id);
+      }
+    }
+    const inWindow = [];
+    for (const message of messages.values()) {
+      if (Number(message.internalDate) >= Date.parse(cursor.after)) inWindow.push(message);
+      else removed.push(message.id);
+    }
+    const remaining = { upserts: upserts.slice(count), deleted: deletions.slice(count) };
+    const hasPending = remaining.upserts.length + remaining.deleted.length > 0;
+    const next = { version: 1, provider: 'google', phase: 'delta', historyId: tail, after: cursor.after,
+      ...(pageToken ? { pageToken } : {}), inboxzeroHistory: 1,
+      ...(hasPending ? { inboxzeroPending: save(accountId, remaining), inboxzeroReplayFrom: replayFrom } : {}) };
+    return { cursor: Buffer.from(JSON.stringify(next)).toString('base64url'),
+      changedThreadIds: [...new Set(inWindow.map(message => message.threadId).filter(Boolean))],
+      deletedMessageIds: [...new Set(removed)], upsertedMessages: inWindow,
+      hasMore: Boolean(pageToken || hasPending), reset: false };
+  };
+}
+function decorateMailboxProvider(provider, accountId, historyPager) {
+  if (provider.name !== 'google') return provider;
+  if (!provider.client?.users?.history?.list || typeof provider.getMessagesBatch !== 'function') {
+    throw new Error('Gmail provider is incompatible with bounded history catch-up');
+  }
+  return new Proxy(provider, { get(target, key) {
+    if (key === 'getMailboxSyncPage') return async input => {
+      try { return await historyPager(target, accountId, input); }
+      catch (error) {
+        if (!error.inboxzeroHistoryExpired) throw error;
+        return target.getMailboxSyncPage(input);
+      }
+    };
+    const value = Reflect.get(target, key, target);
+    return typeof value === 'function' ? value.bind(target) : value;
+  } });
+}
+
 function historyPosition(position) {
   if (!position?.checkpoint) return position;
   try {
@@ -366,11 +483,13 @@ function install() {
   setInterval(() => console.info('[gmail-guard] ' + JSON.stringify({ event: 'pacing-window', ...pace.stats() })), 60000).unref();
   pace.transport = createGmailTransport(pace, { context });
   pace.mailboxSource = decorateMailboxSource;
+  const historyPager = createHistoryPager();
+  pace.mailboxProvider = (provider, accountId) => decorateMailboxProvider(provider, accountId, historyPager);
   globalThis[SLOT] = pace;
   patchBundledTransport();
   const originalFetch = globalThis.fetch.bind(globalThis);
   globalThis.fetch = (input, options) => pace.transport(originalFetch, input, options);
 }
 
-module.exports = { requestCost, createPacer, createGmailTransport, patchAdapterSource, ADAPTER_PLAIN, ADAPTER_OLD, ADAPTER_MANAGED, requestDetails, installRequestContext, decorateMailboxSource, patchRuntimeSource, MAILBOX_FACTORY, MAILBOX_GUARDED, LIVE_SCOPE, historyPosition, install };
+module.exports = { requestCost, createPacer, createGmailTransport, patchAdapterSource, ADAPTER_PLAIN, ADAPTER_OLD, ADAPTER_MANAGED, requestDetails, installRequestContext, decorateMailboxSource, patchRuntimeSource, MAILBOX_FACTORY, MAILBOX_GUARDED, LIVE_SCOPE, historyPosition, createHistoryPager, decorateMailboxProvider, MAILBOX_GUARDED_OLD, install };
 if (process.env.INBOXZERO_GMAIL_PACING === 'true') install();
