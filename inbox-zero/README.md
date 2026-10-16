@@ -168,6 +168,26 @@ also supports `--check` for read-only diagnostics; that mode never invokes
 automation or initializes a processing cursor. Public app login remains required.
 No Pub/Sub subscription or quota increase is needed for polling.
 
+## Daily-use verification (2026-10-16)
+
+- Real authenticated browser: messages rendered while archive enumeration
+  advanced through three 10-message pages; live history reads returned HTTP 200
+  before archive completion, with no Waiting to sync banner during the test.
+- The owner-sent test message appeared in the browser and its existing rule
+  reached `APPLIED`. The approved notification path delivered a mailbox-change
+  event to the browser.
+- Reloading preserved cached mail and the test message, with zero new bootstrap
+  requests. Archive continuation was retained.
+- The active one-minute poller initialized safely, delivered changes, and waited
+  through an app restart. Sending and deletion remain disabled.
+- All 28 pacing/sync/polling tests and CI checks passed. ArgoCD and Gatus are
+  healthy. CNPG's daily offsite base backup completed on 2026-10-16.
+
+The entire archive is not yet cached in each browser. Older mail imports
+incrementally while the browser mailbox engine is running; new-mail catch-up
+is independent. Closing the browser pauses that local archive import, while
+server polling continues automatic rule handling.
+
 ## Optional Google Pub/Sub delivery
 
 Watch renewal remains suspended until real Pub/Sub delivery is configured.
