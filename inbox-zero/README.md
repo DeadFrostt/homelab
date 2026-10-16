@@ -212,3 +212,18 @@ subscription have not been created by this deployment.
 
 Google OAuth must use the public callbacks `/api/auth/callback/google` and
 `/api/google/linking/callback`; the app already generates the public login callback.
+
+### Two-account bulk processing follow-up (2026-10-16)
+
+After linking a second Google mailbox, Gmail again returned per-user quota errors
+and Process Past Emails spent minutes in layered retries. The Cloud quota page
+showed 6,000 units/minute/user; the observed project usage was much higher than
+the application's intended budget, so an increased quota was not assumed to fix it.
+Read batches now contain two subrequests, thread pages contain at most five,
+archive enumeration has lower priority, and quota feedback reduces the pacing
+rate before gradually recovering. Both connected accounts passed authenticated
+thread fetches. A bounded, one-page browser bulk run on the second account fetched
+five threads in about 11 seconds and finished within 40 seconds; all five rule
+executions were APPLIED. No quota errors occurred during this verification.
+This verifies a small run, not completion of either full archive or a sustained
+large backfill under the project's effective quota.
