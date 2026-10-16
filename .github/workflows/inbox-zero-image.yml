@@ -14,6 +14,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - name: Test Gmail request pacing
-        run: node --test inbox-zero/image/gmail-pacing.test.cjs
+        run: node --test inbox-zero/image/gmail-pacing.test.cjs inbox-zero/scripts/poll-gmail.test.mjs
       - name: Check maintenance scripts
         run: node --check inbox-zero/scripts/maintenance.mjs

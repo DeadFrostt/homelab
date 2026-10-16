@@ -1,10 +1,10 @@
 # Inbox Zero on Yeager
 
 GitOps-managed personal Inbox Zero deployment in namespace `inbox-zero`.
-The existing Tailscale HTTPS address is preserved in Infisical. Tailscale Serve
-on port 3017 forwards to the app's NodePort **30317**. Cloudflare Tunnel changes
-are deliberately deferred. Its future target can be
-`http://inbox-zero.inbox-zero.svc.cluster.local:3000` or Yeager's NodePort.
+Canonical URL: **https://zero.deadfrost.dev**, behind Cloudflare Tunnel and
+the app's one-account login allowlist. The tunnel targets
+`http://inbox-zero.inbox-zero.svc.cluster.local:3000`. Tailscale Serve on port
+3017 still forwards to NodePort **30317**; OAuth uses the canonical public URL.
 
 ## Components
 
@@ -134,25 +134,54 @@ The synthetic AI check consumes a small amount of Lithos credit and does not
 read or alter real mail. The app readiness check validates PostgreSQL; its
 liveness check only tests the listener, avoiding restart loops during a DB outage.
 
-## Public access and automatic Gmail notifications: deferred
+## Automatic Gmail handling: polling prepared, activation pending
 
-The app works through its current private URL. Automatic incoming-email rule
-execution still needs Google's Pub/Sub delivery, which the owner deferred with
-public access. Watch renewal is explicitly **suspended** until that is configured.
-The planned topic is `projects/734522807349/topics/inbox-zero-emails`; creating
-that resource and the push subscription is still required.
+Browser mail display now runs live history catch-up independently of archive
+loading, and continues polling while the mailbox is open. Pub/Sub is not required
+for that browser read path.
 
-When adding the public hostname:
+`inbox-zero-gmail-poll` is prepared as a one-minute fallback for closed-browser
+notifications and existing-rule automation. It is deliberately **suspended** and
+its command contains **`--check`** pending owner approval for automatic labels,
+archives, and drafts. Its read-only check passed against the account; no history
+cursor or mailbox content was changed. Sending/deletion restrictions remain set.
 
-1. Point the Cloudflare Tunnel at the service/NodePort without changing this
-   app's namespace or exposing PostgreSQL/Redis.
-2. Update `NEXT_PUBLIC_BASE_URL` in Infisical and both Google OAuth callbacks:
-   `/api/auth/callback/google` and `/api/google/linking/callback`.
-3. Create the Pub/Sub topic and grant Gmail's service account Publisher access.
-4. Create a push subscription to `/api/google/webhook?token=TOKEN`, using the
-   existing verification secret. Google must reach this route without an
-   interactive upstream login challenge; normal app login remains enabled.
-5. Enable `inbox-zero-watch-renewal`, establish the mailbox watch, and verify a
-   new incoming email appears in Assistant History with the expected label.
+On activation, a previously unset processing cursor is initialized at the current
+Gmail history position, so enabling the poller does not replay the existing inbox.
+Past mail remains an explicit Process Past Emails operation. Later polls read
+Gmail's profile (one quota unit), compare the durable app cursor, and deliver new
+history through the existing authenticated internal webhook. That pipeline saves
+its own progress; a failed poll does not advance it. OAuth tokens stay in memory,
+and jobs log counts/status only. Network policies restrict the poller to DNS,
+PostgreSQL, the web service, and public HTTPS.
 
-Changing ingress alone does not complete notification setup.
+```sh
+# Safe: the prepared CronJob currently runs --check only.
+kubectl create job -n inbox-zero --from=cronjob/inbox-zero-gmail-poll inbox-zero-poll-check-NEW_ID
+kubectl logs -n inbox-zero job/inbox-zero-poll-check-NEW_ID
+```
+
+After owner approval, remove `--check`, set `suspend: false`, and verify a new
+incoming message is processed and appears in Assistant History. Public app login
+remains required. No subscription or extra Gmail quota is needed for polling.
+
+## Optional Google Pub/Sub delivery
+
+Watch renewal remains suspended until real Pub/Sub delivery is configured.
+The configured topic placeholder must be replaced with the actual project ID:
+`projects/inbox-zero-511720/topics/inbox-zero-emails`. The topic and push
+subscription have not been created by this deployment.
+
+1. Create the topic in project `inbox-zero-511720`; grant Publisher to
+   `gmail-api-push@system.gserviceaccount.com`.
+2. Set `GOOGLE_PUBSUB_TOPIC_NAME` to that topic in Git and restart web/worker.
+3. Create a push subscription to
+   `https://zero.deadfrost.dev/api/google/webhook?token=TOKEN`, using the existing
+   verification secret privately. This route must not receive an interactive
+   upstream login challenge.
+4. Enable `inbox-zero-watch-renewal`, establish the mailbox watch, and verify a
+   new incoming message reaches the webhook and Assistant History.
+5. Once push delivery is verified, suspend the polling fallback if desired.
+
+Google OAuth must use the public callbacks `/api/auth/callback/google` and
+`/api/google/linking/callback`; the app already generates the public login callback.

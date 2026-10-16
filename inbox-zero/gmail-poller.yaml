@@ -1,0 +1,125 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: inbox-zero-gmail-poll
+  namespace: inbox-zero
+spec:
+  schedule: '* * * * *'
+  suspend: true
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 120
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 150
+      backoffLimit: 1
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels:
+            app: inbox-zero-poller
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          nodeSelector:
+            kubernetes.io/hostname: yeager
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001
+            runAsGroup: 1001
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+          - name: poll
+            image: ghcr.io/deadfrostt/inbox-zero@sha256:3b773fa5b80bd6157c8d5247c45650eca0360a368124bdbf90890c8de1e5146e
+            imagePullPolicy: Never
+            command: [node, /app/poll-gmail.mjs]
+            args: [--check]
+            envFrom:
+            - configMapRef:
+                name: inbox-zero-config
+            - secretRef:
+                name: inbox-zero-env
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop: [ALL]
+            resources:
+              requests:
+                cpu: 50m
+                memory: 128Mi
+              limits:
+                cpu: 500m
+                memory: 256Mi
+            volumeMounts:
+            - name: poll-script
+              mountPath: /app/poll-gmail.mjs
+              subPath: poll-gmail.mjs
+              readOnly: true
+            - name: gmail-runtime
+              mountPath: /app/gmail-pacing.cjs
+              subPath: gmail-pacing.cjs
+              readOnly: true
+          volumes:
+          - name: poll-script
+            configMap:
+              name: inbox-zero-gmail-poller
+          - name: gmail-runtime
+            configMap:
+              name: inbox-zero-gmail-runtime
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-gmail-poller
+  namespace: inbox-zero
+spec:
+  podSelector:
+    matchLabels:
+      app: inbox-zero-poller
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          cnpg.io/cluster: inbox-zero-pg
+    ports:
+    - port: 5432
+  - to:
+    - podSelector:
+        matchLabels:
+          app: inbox-zero
+    ports:
+    - port: 3000
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except:
+        - 10.0.0.0/8
+        - 172.16.0.0/12
+        - 192.168.0.0/16
+        - 100.64.0.0/10
+        - 169.254.0.0/16
+        - 127.0.0.0/8
+    ports:
+    - port: 443
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-poller-postgres
+  namespace: inbox-zero
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/cluster: inbox-zero-pg
+  policyTypes: [Ingress]
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: inbox-zero-poller
+    ports:
+    - port: 5432
