@@ -154,3 +154,72 @@ test('SDK adapter patch upgrades both pristine and previous images and is idempo
     assert.equal(patchAdapterSource(patchAdapterSource(source)), ADAPTER_MANAGED);
   }
 });
+
+const { requestDetails, installRequestContext } = require('./gmail-pacing.cjs');
+
+test('thread pages stay small while preserving filters and continuation tokens', () => {
+  const result = requestDetails('/api/threads?type=inbox&limit=25&after=2026-10-01&nextPageToken=keep-me', 'GET');
+  const parsed = new URL(result.url, 'http://inbox-zero');
+  assert.equal(parsed.searchParams.get('limit'), '10');
+  assert.equal(parsed.searchParams.get('nextPageToken'), 'keep-me');
+  assert.equal(parsed.searchParams.get('after'), '2026-10-01');
+  assert.equal(requestDetails('/api/threads?limit=5', 'GET').url, '/api/threads?limit=5');
+  assert.equal(requestDetails('/api/threads?limit=25', 'POST').url, '/api/threads?limit=25');
+});
+
+test('cheap and foreground calls overtake a queued background read', async () => {
+  let clock = 0, priority = 2, release;
+  const context = () => ({ priority });
+  const order = [];
+  let held = false;
+  const pace = createPacer({ context, now: () => clock, sleep: async delay => {
+    if (delay && !held) {
+      held = true;
+      await new Promise(resolve => { release = resolve; });
+    }
+    clock += delay;
+  } });
+  await pace(message);
+  const background = pace(message).then(() => order.push('background'));
+  priority = 1;
+  const foreground = pace(message).then(() => order.push('foreground'));
+  const cheap = pace('https://gmail.googleapis.com/gmail/v1/users/me/labels').then(() => order.push('labels'));
+  release();
+  await Promise.all([background, foreground, cheap]);
+  assert.deepEqual(order, ['labels', 'foreground', 'background']);
+});
+
+test('a disconnected browser cancels queued Gmail work even without an SDK signal', async () => {
+  const controller = new AbortController();
+  const pace = createPacer();
+  await pace(message);
+  const transport = createGmailTransport(pace, { context: () => ({ signal: controller.signal }), log: () => {} });
+  let fetches = 0;
+  const pending = transport(async () => { fetches++; return new Response('{}'); }, message);
+  controller.abort();
+  await assert.rejects(pending, { name: 'AbortError' });
+  assert.equal(fetches, 0);
+});
+
+test('HTTP request context preserves pagination and aborts after a premature response close', async () => {
+  const { AsyncLocalStorage } = require('node:async_hooks');
+  const { Server } = require('node:http');
+  const { EventEmitter } = require('node:events');
+  const storage = new AsyncLocalStorage();
+  const restore = installRequestContext(storage);
+  try {
+    const server = new Server();
+    const request = Object.assign(new EventEmitter(), { url: '/api/threads?limit=25&nextPageToken=next', method: 'GET' });
+    const response = Object.assign(new EventEmitter(), { writableEnded: false });
+    let signal;
+    server.on('request', () => {
+      assert.equal(request.url, '/api/threads?limit=10&nextPageToken=next');
+      assert.equal(storage.getStore().priority, 1);
+      signal = storage.getStore().signal;
+    });
+    server.emit('request', request, response);
+    assert.equal(signal.aborted, false);
+    response.emit('close');
+    assert.equal(signal.aborted, true);
+  } finally { restore(); }
+});

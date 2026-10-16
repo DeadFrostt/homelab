@@ -36,34 +36,44 @@ function requestCost(input, options = {}) {
   return 100;
 }
 
-function createPacer({ now = Date.now, sleep = abortableSleep, unitsPerSecond = RATE } = {}) {
+function createPacer({ now = Date.now, sleep = abortableSleep, unitsPerSecond = RATE, context = () => null } = {}) {
   let availableAt = 0;
   let blockedUntil = 0;
   let draining = false;
   const queue = [];
+  function remove(entry) {
+    const index = queue.indexOf(entry);
+    if (index >= 0) queue.splice(index, 1);
+    entry.signal?.removeEventListener('abort', entry.abort);
+  }
+  function next() {
+    for (const entry of [...queue]) if (entry.cancelled) remove(entry);
+    return queue.reduce((best, entry) => !best || entry.priority < best.priority ? entry : best, null);
+  }
   async function drain() {
     if (draining) return;
     draining = true;
     try {
       while (queue.length) {
-        const entry = queue[0];
-        if (entry.cancelled) { queue.shift(); continue; }
+        const waiting = next();
+        if (!waiting) break;
         try {
-          // A response can extend the cooldown while this entry is sleeping.
           let deadline;
           do {
             deadline = Math.max(availableAt, blockedUntil);
-            await sleep(Math.max(0, deadline - now()), entry.signal);
+            await sleep(Math.max(0, deadline - now()), waiting.signal);
           } while (blockedUntil > deadline);
+          waiting.signal?.throwIfAborted();
+          // New foreground/cheap calls may arrive while the quota slot sleeps.
+          const entry = next();
+          if (!entry) continue;
           entry.signal?.throwIfAborted();
           availableAt = Math.max(now(), availableAt, blockedUntil) + Math.ceil(entry.cost * 1000 / unitsPerSecond);
-          entry.signal?.removeEventListener('abort', entry.abort);
-          queue.shift();
+          remove(entry);
           entry.resolve();
         } catch (error) {
-          entry.signal?.removeEventListener('abort', entry.abort);
-          queue.shift();
-          entry.reject(error);
+          remove(waiting);
+          waiting.reject(error);
         }
       }
     } finally { draining = false; }
@@ -73,8 +83,9 @@ function createPacer({ now = Date.now, sleep = abortableSleep, unitsPerSecond = 
     if (!cost) return;
     const signal = options.signal || input?.signal;
     signal?.throwIfAborted();
+    const priority = cost <= 5 ? 0 : context()?.priority ?? 2;
     return new Promise((resolve, reject) => {
-      const entry = { cost, signal, resolve, reject, cancelled: false };
+      const entry = { cost, priority, signal, resolve, reject, cancelled: false };
       entry.abort = () => { entry.cancelled = true; reject(signal.reason); };
       signal?.addEventListener('abort', entry.abort, { once: true });
       queue.push(entry);
@@ -142,7 +153,7 @@ function partRateLimited(part) {
   catch { return status === 429; }
 }
 
-function createGmailTransport(pace, { cooldownMs = 65000, log = console.info } = {}) {
+function createGmailTransport(pace, { cooldownMs = 65000, log = console.info, context = () => null } = {}) {
   function quotaCooldown(response) {
     const retryAfter = response.headers.get('retry-after');
     const retryMs = retryAfter && /^\d+$/.test(retryAfter) ? Number(retryAfter) * 1000 : Math.max(0, Date.parse(retryAfter) - Date.now()) || 0;
@@ -174,6 +185,12 @@ function createGmailTransport(pace, { cooldownMs = 65000, log = console.info } =
   }
   return async function transport(fetchImplementation, input, options = {}) {
     if (!requestCost(input, options)) return fetchImplementation(input, options);
+    const requestSignal = context()?.signal;
+    if (requestSignal) {
+      const signals = [options.signal || input?.signal, requestSignal].filter(Boolean);
+      options = { ...options, signal: AbortSignal.any(signals) };
+    }
+    options.signal?.throwIfAborted();
     const url = new URL(input?.url || input);
     const method = String(options.method || input?.method || 'GET').toUpperCase();
     if (url.pathname !== '/batch/gmail/v1') return send(fetchImplementation, input, options, method === 'GET');
@@ -200,15 +217,53 @@ function createGmailTransport(pace, { cooldownMs = 65000, log = console.info } =
   };
 }
 
+function requestDetails(url, method) {
+  const parsed = new URL(url, 'http://inbox-zero');
+  if (method === 'GET' && parsed.pathname === '/api/threads') {
+    const limit = Number(parsed.searchParams.get('limit'));
+    if (!limit || limit > 10) parsed.searchParams.set('limit', '10');
+  }
+  return {
+    url: parsed.pathname + parsed.search,
+    priority: method === 'GET' && !parsed.pathname.startsWith('/api/cron/') ? 1 : 2,
+  };
+}
+function installRequestContext(storage) {
+  const { Server } = require('node:http');
+  const originalEmit = Server.prototype.emit;
+  function emit(event, ...args) {
+    if (event !== 'request') return originalEmit.call(this, event, ...args);
+    const [request, response] = args;
+    const details = requestDetails(request.url, request.method);
+    request.url = details.url;
+    const controller = new AbortController();
+    const abort = () => controller.abort(new DOMException('Browser request disconnected', 'AbortError'));
+    const close = () => { if (!response.writableEnded) abort(); };
+    request.once('aborted', abort);
+    response.once('close', close);
+    response.once('finish', () => {
+      request.removeListener('aborted', abort);
+      response.removeListener('close', close);
+    });
+    return storage.run({ priority: details.priority, signal: controller.signal }, () => originalEmit.call(this, event, ...args));
+  }
+  Server.prototype.emit = emit;
+  return () => { if (Server.prototype.emit === emit) Server.prototype.emit = originalEmit; };
+}
+
 function install() {
   if (globalThis[SLOT]) return;
-  const pace = createPacer();
-  pace.transport = createGmailTransport(pace);
+  const { AsyncLocalStorage } = require('node:async_hooks');
+  const storage = new AsyncLocalStorage();
+  const context = () => storage.getStore();
+  installRequestContext(storage);
+  const pace = createPacer({ context });
+  pace.transport = createGmailTransport(pace, { context });
   globalThis[SLOT] = pace;
   patchBundledTransport();
   const originalFetch = globalThis.fetch.bind(globalThis);
   globalThis.fetch = (input, options) => pace.transport(originalFetch, input, options);
 }
 
-module.exports = { requestCost, createPacer, createGmailTransport, patchAdapterSource, ADAPTER_PLAIN, ADAPTER_OLD, ADAPTER_MANAGED, install };
+module.exports = { requestCost, createPacer, createGmailTransport, patchAdapterSource, ADAPTER_PLAIN, ADAPTER_OLD, ADAPTER_MANAGED, requestDetails, installRequestContext, install };
 if (process.env.INBOXZERO_GMAIL_PACING === 'true') install();

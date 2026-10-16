@@ -46,7 +46,12 @@ Quota errors, including errors inside HTTP-200 multipart responses, pause all
 Gmail work for at least **65 seconds** (or longer Retry-After). Read-only
 requests retry once through that shared cooldown; writes are never replayed
 by this guard. Cancelled requests release pending queue positions.
-Other providers, including Lithos, are unaffected.
+Foreground Gmail reads take priority over background analysis, and cheap
+label/profile requests take priority over bulk reads. `/api/threads` pages are
+capped at 10 while retaining provider continuation tokens, so Process Past
+Emails continues across smaller pages. Browser disconnects cancel queued
+Gmail work instead of leaving abandoned reads behind. Other providers,
+including Lithos, are unaffected.
 
 Keep **one web replica** and the `Recreate` strategy: this is a single-process
 budget for one mailbox. Scaling requires a distributed per-account limiter.
