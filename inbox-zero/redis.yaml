@@ -80,6 +80,11 @@ spec:
       resources:
         requests:
           storage: 2Gi
+      volumeMode: Filesystem
+    apiVersion: v1
+    kind: PersistentVolumeClaim
+    status:
+      phase: Pending
 ---
 apiVersion: v1
 kind: Service
