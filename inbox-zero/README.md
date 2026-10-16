@@ -134,17 +134,16 @@ The synthetic AI check consumes a small amount of Lithos credit and does not
 read or alter real mail. The app readiness check validates PostgreSQL; its
 liveness check only tests the listener, avoiding restart loops during a DB outage.
 
-## Automatic Gmail handling: polling prepared, activation pending
+## Automatic Gmail handling: one-minute polling fallback
 
 Browser mail display now runs live history catch-up independently of archive
 loading, and continues polling while the mailbox is open. Pub/Sub is not required
 for that browser read path.
 
-`inbox-zero-gmail-poll` is prepared as a one-minute fallback for closed-browser
-notifications and existing-rule automation. It is deliberately **suspended** and
-its command contains **`--check`** pending owner approval for automatic labels,
-archives, and drafts. Its read-only check passed against the account; no history
-cursor or mailbox content was changed. Sending/deletion restrictions remain set.
+`inbox-zero-gmail-poll` runs every minute for closed-browser notifications and
+existing-rule automation. The owner explicitly approved automatic labels,
+archives, and drafts. Sending/deletion restrictions remain set. Its preceding
+read-only check passed without changing the processing cursor or mailbox.
 
 On activation, a previously unset processing cursor is initialized at the current
 Gmail history position, so enabling the poller does not replay the existing inbox.
@@ -156,14 +155,15 @@ and jobs log counts/status only. Network policies restrict the poller to DNS,
 PostgreSQL, the web service, and public HTTPS.
 
 ```sh
-# Safe: the prepared CronJob currently runs --check only.
+# Run one authorized processing pass immediately.
 kubectl create job -n inbox-zero --from=cronjob/inbox-zero-gmail-poll inbox-zero-poll-check-NEW_ID
 kubectl logs -n inbox-zero job/inbox-zero-poll-check-NEW_ID
 ```
 
-After owner approval, remove `--check`, set `suspend: false`, and verify a new
-incoming message is processed and appears in Assistant History. Public app login
-remains required. No subscription or extra Gmail quota is needed for polling.
+The poller is active with `suspend: false` and no `--check` argument. The script
+also supports `--check` for read-only diagnostics; that mode never invokes
+automation or initializes a processing cursor. Public app login remains required.
+No Pub/Sub subscription or quota increase is needed for polling.
 
 ## Optional Google Pub/Sub delivery
 

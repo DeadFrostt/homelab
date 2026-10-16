@@ -5,7 +5,7 @@ metadata:
   namespace: inbox-zero
 spec:
   schedule: '* * * * *'
-  suspend: true
+  suspend: false
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 120
   successfulJobsHistoryLimit: 2
@@ -35,7 +35,7 @@ spec:
             image: ghcr.io/deadfrostt/inbox-zero@sha256:3b773fa5b80bd6157c8d5247c45650eca0360a368124bdbf90890c8de1e5146e
             imagePullPolicy: Never
             command: [node, /app/poll-gmail.mjs]
-            args: [--check]
+            args: []
             envFrom:
             - configMapRef:
                 name: inbox-zero-config
