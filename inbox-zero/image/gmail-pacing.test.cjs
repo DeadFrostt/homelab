@@ -361,3 +361,35 @@ test('aged archive reads cannot starve behind ongoing higher-priority automation
   assert.ok(order.indexOf('archive') < 15, 'archive must advance before the automation queue drains');
   assert.equal(pace.stats().grantedRequests, 32);
 });
+
+
+const { historyPosition } = require('./gmail-pacing.cjs');
+const snapshotCursor = () => Buffer.from(JSON.stringify({version:1,provider:'google',phase:'snapshot',historyId:'9007199254740993123',after:'1970-01-01T00:00:00.000Z',pageToken:'archive-page'})).toString('base64url');
+test('bootstrap records a genuine history baseline rather than a second archive scan', async () => {
+  const {source}=fakeMailboxSource();
+  source.beginBootstrap=async input=>{const catchUpFrom={streamId:input.scope.id,generation:'g',checkpoint:snapshotCursor()};return {status:'ok',value:{catchUpFrom,enumerationToken:JSON.stringify({scopeId:input.scope.id,catchUpFrom})}}};
+  const guarded=decorateMailboxSource(source,{name:'google'});
+  for(const id of [LIVE_SCOPE,'primary']) {
+    const result=await guarded.beginBootstrap({scope:{id}});
+    const cursor=JSON.parse(Buffer.from(result.value.catchUpFrom.checkpoint,'base64url'));
+    assert.equal(cursor.phase,'delta');assert.equal(cursor.pageToken,undefined);
+    assert.equal(cursor.historyId,'9007199254740993123');
+    assert.deepEqual(JSON.parse(result.value.enumerationToken).catchUpFrom,result.value.catchUpFrom);
+  }
+});
+test('existing snapshot checkpoints migrate without resetting the client commit position', async () => {
+  const position={streamId:LIVE_SCOPE,generation:'g',checkpoint:snapshotCursor()};
+  const {source}=fakeMailboxSource();
+  let observed;
+  source.readChanges=async input=>{observed=input.position;return {status:'page',page:{from:input.position,to:input.position,changes:[]}}};
+  source.readChangesBatch=async input=>Promise.all(input.reads.map(read=>source.readChanges(read)));
+  const guarded=decorateMailboxSource(source,{name:'google'});
+  const result=await guarded.readChanges({position});
+  assert.equal(JSON.parse(Buffer.from(observed.checkpoint,'base64url')).phase,'delta');
+  assert.deepEqual(result.page.from,position);
+  assert.notEqual(result.page.to.checkpoint,position.checkpoint);
+  const batch=await guarded.readChangesBatch({reads:[{position}]});
+  assert.deepEqual(batch[0].page.from,position);
+  assert.equal(JSON.parse(Buffer.from(batch[0].page.to.checkpoint,'base64url')).phase,'delta');
+  assert.deepEqual(historyPosition(observed),observed);
+});

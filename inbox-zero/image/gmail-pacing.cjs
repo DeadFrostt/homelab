@@ -158,6 +158,19 @@ function patchRuntimeSource(source) {
   return patchAdapterSource(source).replaceAll(MAILBOX_FACTORY, MAILBOX_GUARDED);
 }
 const LIVE_SCOPE = 'primary-live';
+function historyPosition(position) {
+  if (!position?.checkpoint) return position;
+  try {
+    const cursor = JSON.parse(Buffer.from(position.checkpoint, 'base64url').toString('utf8'));
+    if (cursor.version !== 1 || cursor.provider !== 'google' || cursor.phase !== 'snapshot' ||
+        !/^\d+$/.test(cursor.historyId) || !Number.isFinite(Date.parse(cursor.after))) return position;
+    const { pageToken, ...baseline } = cursor;
+    return { ...position, checkpoint: Buffer.from(JSON.stringify({ ...baseline, phase: 'delta' })).toString('base64url') };
+  } catch { return position; }
+}
+function restoreReadFrom(result, position) {
+  return result?.status === 'page' ? { ...result, page: { ...result.page, from: position } } : result;
+}
 function decorateMailboxSource(source, provider) {
   if (provider.name !== 'google') return source;
   const page = input => ({ ...input, pageSize: Math.min(input.pageSize || 10, 10) });
@@ -180,7 +193,11 @@ function decorateMailboxSource(source, provider) {
       if (input.scope.id === LIVE_SCOPE && result.status === 'ok' && !result.value.catchUpFrom?.checkpoint) {
         return { status: 'paused', reason: 'unavailable', retryAfterMs: 5000 };
       }
-      return result;
+      if (result.status !== 'ok' || !result.value.catchUpFrom) return result;
+      const catchUpFrom = historyPosition(result.value.catchUpFrom);
+      let enumerationToken = result.value.enumerationToken;
+      try { enumerationToken = JSON.stringify({ ...JSON.parse(enumerationToken), catchUpFrom }); } catch {}
+      return { ...result, value: { ...result.value, catchUpFrom, enumerationToken } };
     },
     async enumerate(input) {
       let token;
@@ -192,8 +209,13 @@ function decorateMailboxSource(source, provider) {
       }
       return source.enumerate(page(input));
     },
-    readChanges: input => source.readChanges(page(input)),
-    ...(source.readChangesBatch ? { readChangesBatch: input => source.readChangesBatch(page(input)) } : {}),
+    async readChanges(input) {
+      return restoreReadFrom(await source.readChanges(page({ ...input, position: historyPosition(input.position) })), input.position);
+    },
+    ...(source.readChangesBatch ? { async readChangesBatch(input) {
+      const results = await source.readChangesBatch(page({ ...input, reads: input.reads.map(read => ({ ...read, position: historyPosition(read.position) })) }));
+      return results.map((result, i) => restoreReadFrom(result, input.reads[i].position));
+    } } : {}),
     ...(source.search ? { search: input => source.search(page(input)) } : {}),
   };
 }
@@ -350,5 +372,5 @@ function install() {
   globalThis.fetch = (input, options) => pace.transport(originalFetch, input, options);
 }
 
-module.exports = { requestCost, createPacer, createGmailTransport, patchAdapterSource, ADAPTER_PLAIN, ADAPTER_OLD, ADAPTER_MANAGED, requestDetails, installRequestContext, decorateMailboxSource, patchRuntimeSource, MAILBOX_FACTORY, MAILBOX_GUARDED, LIVE_SCOPE, install };
+module.exports = { requestCost, createPacer, createGmailTransport, patchAdapterSource, ADAPTER_PLAIN, ADAPTER_OLD, ADAPTER_MANAGED, requestDetails, installRequestContext, decorateMailboxSource, patchRuntimeSource, MAILBOX_FACTORY, MAILBOX_GUARDED, LIVE_SCOPE, historyPosition, install };
 if (process.env.INBOXZERO_GMAIL_PACING === 'true') install();

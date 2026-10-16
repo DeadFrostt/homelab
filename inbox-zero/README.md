@@ -68,7 +68,10 @@ with Process Past Emails. Its source is decorated before modules load to bound e
 search, and change pages at 10 messages. Google scope `primary` continues the
 complete archive scan with its original continuation tokens. A separate
 `primary-live` history stream initializes from the current Gmail checkpoint
-without re-enumerating the archive, so new-mail catch-up does not wait for
+with a `delta` checkpoint (the upstream baseline returns a snapshot cursor).
+Existing snapshot checkpoints are migrated using their original history ID,
+while each response retains the client's original `from` position for an atomic
+commit. This avoids a second archive scan, so new-mail catch-up does not wait for
 thousands of older messages to finish downloading. Neither scope clears local
 mail or deletes provider messages. Existing browser caches retain their progress.
 
