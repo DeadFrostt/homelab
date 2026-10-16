@@ -39,3 +39,16 @@ test('read-only checks never initialize a cursor or invoke mailbox automation', 
     assert.equal(result.notified, false);
   }
 });
+
+test('polling waits through an app restart and requires database-backed readiness', async () => {
+  const { waitForAppReady } = await import('./poll-gmail.mjs');
+  let clock = 0, calls = 0;
+  await waitForAppReady({ env: { HEALTH_API_KEY: 'test-only-key' }, now: () => clock, sleep: async ms => { clock += ms; },
+    fetchImpl: async (url, options) => {
+      assert.equal(options.headers['x-health-api-key'], 'test-only-key');
+      calls++;
+      return new Response(JSON.stringify({ database: { status: calls === 3 ? 'healthy' : 'unhealthy' } }), { status: calls === 1 ? 503 : 200 });
+    } });
+  assert.equal(calls, 3);
+  assert.equal(clock, 6000);
+});

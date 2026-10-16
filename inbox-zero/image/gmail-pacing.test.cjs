@@ -298,3 +298,20 @@ test('mailbox protocol POST requests receive foreground priority', () => {
   }
   assert.equal(requestDetails('/api/cron/automation-jobs', 'GET').priority, 2);
 });
+
+test('automation cannot starve behind an uninterrupted foreground backfill', async () => {
+  let clock = 0, priority = 2, release;
+  const order = [];
+  let held = false;
+  const pace = createPacer({ context: () => ({ priority }), now: () => clock, sleep: async delay => {
+    if (delay && !held) { held = true; await new Promise(resolve => { release = resolve; }); }
+    clock += delay;
+  } });
+  await pace(message);
+  const background = pace(message).then(() => order.push('automation'));
+  priority = 1;
+  const foreground = Array.from({ length: 12 }, (_, i) => pace(message).then(() => order.push('foreground-' + i)));
+  release();
+  await Promise.all([background, ...foreground]);
+  assert.equal(order.indexOf('automation'), 4);
+});

@@ -40,6 +40,7 @@ function createPacer({ now = Date.now, sleep = abortableSleep, unitsPerSecond = 
   let availableAt = 0;
   let blockedUntil = 0;
   let draining = false;
+  let foregroundStreak = 0;
   const queue = [];
   function remove(entry) {
     const index = queue.indexOf(entry);
@@ -48,7 +49,10 @@ function createPacer({ now = Date.now, sleep = abortableSleep, unitsPerSecond = 
   }
   function next() {
     for (const entry of [...queue]) if (entry.cancelled) remove(entry);
-    return queue.reduce((best, entry) => !best || entry.priority < best.priority ? entry : best, null);
+    const best = queue.reduce((candidate, entry) => !candidate || entry.priority < candidate.priority ? entry : candidate, null);
+    // Preserve cheap UI calls, but reserve background progress during a full import.
+    if (best?.priority === 1 && foregroundStreak >= 4) return queue.find(entry => entry.priority === 2) || best;
+    return best;
   }
   async function drain() {
     if (draining) return;
@@ -70,6 +74,8 @@ function createPacer({ now = Date.now, sleep = abortableSleep, unitsPerSecond = 
           entry.signal?.throwIfAborted();
           availableAt = Math.max(now(), availableAt, blockedUntil) + Math.ceil(entry.cost * 1000 / unitsPerSecond);
           remove(entry);
+          if (entry.priority === 2) foregroundStreak = 0;
+          else if (entry.priority === 1) foregroundStreak++;
           entry.resolve();
         } catch (error) {
           remove(waiting);

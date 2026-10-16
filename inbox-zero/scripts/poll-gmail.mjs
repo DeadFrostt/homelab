@@ -41,8 +41,23 @@ export async function pollAccount({ account, current, initialize, notify, checkO
   return { action, notified: action === 'notify' };
 }
 
+export async function waitForAppReady({ env, fetchImpl, now = Date.now, sleep = ms => new Promise(resolve => setTimeout(resolve, ms)) }) {
+  const deadline = now() + 240000;
+  while (now() < deadline) {
+    try {
+      const response = await fetchImpl(new URL('/api/health', env.INTERNAL_API_URL || 'http://inbox-zero:3000'), {
+        headers: { 'x-health-api-key': env.HEALTH_API_KEY }, signal: AbortSignal.timeout(5000),
+      });
+      if (response.ok && (await response.json()).database?.status === 'healthy') return;
+    } catch {}
+    await sleep(3000);
+  }
+  throw new PollError('app-not-ready');
+}
+
 export async function runPoller({ env = process.env, fetchImpl = fetch, checkOnly = false } = {}) {
   if (!env.GOOGLE_PUBSUB_VERIFICATION_TOKEN?.trim()) throw new PollError('missing-webhook-verification-token');
+  await waitForAppReady({ env, fetchImpl });
   const { Client } = require(require.resolve('pg', { paths: ['/app/apps/web'] }));
   const db = new Client({ connectionString: env.DATABASE_URL, connectionTimeoutMillis: 10000, statement_timeout: 10000 });
   await db.connect();

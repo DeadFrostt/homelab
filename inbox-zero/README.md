@@ -47,7 +47,9 @@ Gmail work for at least **65 seconds** (or longer Retry-After). Read-only
 requests retry once through that shared cooldown; writes are never replayed
 by this guard. Cancelled requests release pending queue positions.
 Foreground Gmail reads take priority over background analysis, and cheap
-label/profile requests take priority over bulk reads. `/api/threads` pages are
+label/profile requests take priority over bulk reads. After four foreground
+reads, a waiting background read receives a quota slot so automated rules
+cannot starve during a continuous archive import. `/api/threads` pages are
 capped at 10 while retaining provider continuation tokens, so Process Past
 Emails continues across smaller pages. Browser disconnects cancel queued
 Gmail work instead of leaving abandoned reads behind. Other providers,
@@ -152,7 +154,8 @@ Gmail's profile (one quota unit), compare the durable app cursor, and deliver ne
 history through the existing authenticated internal webhook. That pipeline saves
 its own progress; a failed poll does not advance it. OAuth tokens stay in memory,
 and jobs log counts/status only. Network policies restrict the poller to DNS,
-PostgreSQL, the web service, and public HTTPS.
+PostgreSQL, the web service, and public HTTPS. Polling waits for authenticated
+database-backed app readiness during restarts before notifying the webhook.
 
 ```sh
 # Run one authorized processing pass immediately.
