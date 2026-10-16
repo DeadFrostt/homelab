@@ -1,6 +1,6 @@
 'use strict';
 
-// Single-process pacing for this single-mailbox pilot. The worker forwards
+// Single-process pacing shared by linked mailboxes. The worker forwards
 // mailbox work to the web process. Keep below Gmail's 6,000 units/minute.
 const SLOT = Symbol.for('inboxzero.gmailPacing');
 const RATE = 25; // 1,500 units/minute; tolerate lower effective Gmail limits.
@@ -41,6 +41,9 @@ function createPacer({ now = Date.now, sleep = abortableSleep, unitsPerSecond = 
   let blockedUntil = 0;
   let draining = false;
   let foregroundStreak = 0;
+  let effectiveRate = unitsPerSecond;
+  let reducedAt = -Infinity;
+  let recoveryAt = 0;
   const queue = [];
   function remove(entry) {
     const index = queue.indexOf(entry);
@@ -51,7 +54,7 @@ function createPacer({ now = Date.now, sleep = abortableSleep, unitsPerSecond = 
     for (const entry of [...queue]) if (entry.cancelled) remove(entry);
     const best = queue.reduce((candidate, entry) => !candidate || entry.priority < candidate.priority ? entry : candidate, null);
     // Preserve cheap UI calls, but reserve background progress during a full import.
-    if (best?.priority === 1 && foregroundStreak >= 4) return queue.find(entry => entry.priority === 2) || best;
+    if (best?.priority === 1 && foregroundStreak >= 4) return queue.find(entry => entry.priority === 2) || queue.find(entry => entry.priority === 3) || best;
     return best;
   }
   async function drain() {
@@ -72,9 +75,13 @@ function createPacer({ now = Date.now, sleep = abortableSleep, unitsPerSecond = 
           const entry = next();
           if (!entry) continue;
           entry.signal?.throwIfAborted();
-          availableAt = Math.max(now(), availableAt, blockedUntil) + Math.ceil(entry.cost * 1000 / unitsPerSecond);
+          if (effectiveRate < unitsPerSecond && now() >= recoveryAt) {
+            effectiveRate = Math.min(unitsPerSecond, effectiveRate * 1.25);
+            recoveryAt = now() + 120000;
+          }
+          availableAt = Math.max(now(), availableAt, blockedUntil) + Math.ceil(entry.cost * 1000 / effectiveRate);
           remove(entry);
-          if (entry.priority === 2) foregroundStreak = 0;
+          if (entry.priority >= 2) foregroundStreak = 0;
           else if (entry.priority === 1) foregroundStreak++;
           entry.resolve();
         } catch (error) {
@@ -100,6 +107,15 @@ function createPacer({ now = Date.now, sleep = abortableSleep, unitsPerSecond = 
   };
   pace.cooldown = milliseconds => {
     blockedUntil = Math.max(blockedUntil, now() + milliseconds);
+  };
+  pace.congestion = () => {
+    // A burst of failed subrequests must reduce the rate only once per window.
+    if (now() - reducedAt >= 60000) {
+      effectiveRate = Math.max(unitsPerSecond / 8, effectiveRate / 2);
+      reducedAt = now();
+    }
+    recoveryAt = now() + 120000;
+    return effectiveRate;
   };
   return pace;
 }
@@ -212,7 +228,8 @@ function createGmailTransport(pace, { cooldownMs = 65000, log = console.info, co
     const retryMs = retryAfter && /^\d+$/.test(retryAfter) ? Number(retryAfter) * 1000 : Math.max(0, Date.parse(retryAfter) - Date.now()) || 0;
     const delay = Math.max(cooldownMs, retryMs);
     pace.cooldown(delay);
-    log('[gmail-guard] ' + JSON.stringify({ event: 'quota-cooldown', seconds: Math.ceil(delay / 1000) }));
+    const unitsPerSecond = pace.congestion?.();
+    log('[gmail-guard] ' + JSON.stringify({ event: 'quota-cooldown', seconds: Math.ceil(delay / 1000), unitsPerSecond }));
   }
   async function limited(response) {
     const type = response.headers.get('content-type') || '';
@@ -253,8 +270,8 @@ function createGmailTransport(pace, { cooldownMs = 65000, log = console.info, co
     // Only split/retry the app's read-only batch format. Never replay writes.
     if (!parts.length || parts.some(part => !/\nGET \/gmail\/v1\//.test(part))) return send(fetchImplementation, input, options, false);
     const responses = [];
-    for (let offset = 0; offset < parts.length; offset += 10) {
-      const chunk = parts.slice(offset, offset + 10);
+    for (let offset = 0; offset < parts.length; offset += 2) {
+      const chunk = parts.slice(offset, offset + 2);
       const body = chunk.map(part => '--' + boundary + part).join('') + '--' + boundary + '--';
       const response = await send(fetchImplementation, input, { ...options, body }, true);
       if (!response.ok) return response;
@@ -263,7 +280,7 @@ function createGmailTransport(pace, { cooldownMs = 65000, log = console.info, co
       responses.push(...multipartParts(await response.text(), responseBoundary));
     }
     const mergedBoundary = 'inboxzero_gmail_guard';
-    log('[gmail-guard] ' + JSON.stringify({ event: 'read-batch-complete', requests: parts.length, batches: Math.ceil(parts.length / 10) }));
+    log('[gmail-guard] ' + JSON.stringify({ event: 'read-batch-complete', requests: parts.length, batches: Math.ceil(parts.length / 2) }));
     return new Response(responses.map(part => '--' + mergedBoundary + part).join('') + '--' + mergedBoundary + '--\r\n', {
       status: 200, headers: { 'content-type': 'multipart/mixed; boundary=' + mergedBoundary },
     });
@@ -274,11 +291,11 @@ function requestDetails(url, method) {
   const parsed = new URL(url, 'http://inbox-zero');
   if (method === 'GET' && parsed.pathname === '/api/threads') {
     const limit = Number(parsed.searchParams.get('limit'));
-    if (!limit || limit > 10) parsed.searchParams.set('limit', '10');
+    if (!limit || limit > 5) parsed.searchParams.set('limit', '5');
   }
   return {
     url: parsed.pathname + parsed.search,
-    priority: (method === 'GET' && !parsed.pathname.startsWith('/api/cron/')) || /^\/api\/mail\/v1\/accounts\/[^/]+\/(?:scopes|bootstrap|enumeration|changes(?:\/batch)?|hydration|search|assistant-state)$/.test(parsed.pathname) ? 1 : 2,
+    priority: /^\/api\/mail\/v1\/accounts\/[^/]+\/enumeration$/.test(parsed.pathname) ? 3 : (method === 'GET' && !parsed.pathname.startsWith('/api/cron/')) || /^\/api\/mail\/v1\/accounts\/[^/]+\/(?:scopes|bootstrap|enumeration|changes(?:\/batch)?|hydration|search|assistant-state)$/.test(parsed.pathname) ? 1 : 2,
   };
 }
 function installRequestContext(storage) {

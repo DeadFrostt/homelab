@@ -40,8 +40,10 @@ not refresh automatically.
 The upstream app can exhaust Gmail's per-user minute budget during catch-up.
 The image patches its bundled Gaxios adapter to use a shared in-process transport;
 the runtime also covers direct multipart Gmail batch requests. It accounts for
-subrequest quota costs and spaces work at **1,500 units/minute**, splitting
-read-only batches into at most **10 requests** each to avoid large bursts.
+subrequest quota costs and spaces work at a maximum of **1,500 units/minute**,
+splitting read-only batches into at most **two requests** to avoid large bursts.
+Quota failures halve the effective rate (once per minute, down to one eighth
+of the maximum); after two quiet minutes it recovers gradually.
 Quota errors, including errors inside HTTP-200 multipart responses, pause all
 Gmail work for at least **65 seconds** (or longer Retry-After). Read-only
 requests retry once through that shared cooldown; writes are never replayed
@@ -50,13 +52,15 @@ Foreground Gmail reads take priority over background analysis, and cheap
 label/profile requests take priority over bulk reads. After four foreground
 reads, a waiting background read receives a quota slot so automated rules
 cannot starve during a continuous archive import. `/api/threads` pages are
-capped at 10 while retaining provider continuation tokens, so Process Past
+capped at five while retaining provider continuation tokens, so Process Past
 Emails continues across smaller pages. Browser disconnects cancel queued
 Gmail work instead of leaving abandoned reads behind. Other providers,
 including Lithos, are unaffected.
 
-The browser mailbox protocol uses POST requests; these receive foreground
-priority too. Its source is decorated before modules load to bound enumeration,
+The browser mailbox protocol uses POST requests; interactive reads receive
+foreground priority too. Archive enumeration runs below automatic rule processing
+and bulk reads, so opening a mailbox does not give its full import equal priority
+with Process Past Emails. Its source is decorated before modules load to bound enumeration,
 search, and change pages at 10 messages. Google scope `primary` continues the
 complete archive scan with its original continuation tokens. A separate
 `primary-live` history stream initializes from the current Gmail checkpoint
@@ -65,7 +69,7 @@ thousands of older messages to finish downloading. Neither scope clears local
 mail or deletes provider messages. Existing browser caches retain their progress.
 
 Keep **one web replica** and the `Recreate` strategy: this is a single-process
-budget for one mailbox. Scaling requires a distributed per-account limiter.
+budget shared by linked mailboxes. Scaling requires a distributed per-account limiter.
 The pacer is mounted from a hashed ConfigMap so changes trigger a rollout.
 The preload upgrades the pinned image's adapter hook before server modules load;
 the writable compiled chunks are owned by UID 1001. The exact adapter signature

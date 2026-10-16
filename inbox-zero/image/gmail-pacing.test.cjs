@@ -97,7 +97,7 @@ test('a cooldown arriving during a pacing sleep extends that sleep', async () =>
   assert.deepEqual(delays, [0, 800, 64200]);
 });
 
-test('large read batches become batches of ten and retain all results in order', async () => {
+test('large read batches become batches of two and retain all results in order', async () => {
   const sizes = [];
   const costs = [];
   const transport = createGmailTransport(async (url, options) => costs.push(requestCost(url, options)), { log: () => {} });
@@ -106,8 +106,8 @@ test('large read batches become batches of ten and retain all results in order',
     sizes.push(ids.length);
     return batchResponse(ids);
   }, batchUrl, batchOptions(25));
-  assert.deepEqual(sizes, [10, 10, 5]);
-  assert.deepEqual(costs, [200, 200, 100]);
+  assert.deepEqual(sizes, [...Array(12).fill(2), 1]);
+  assert.deepEqual(costs, [...Array(12).fill(40), 20]);
   const ids = [...(await result.text()).matchAll(/"id":"(\d+)"/g)].map(match => Number(match[1]));
   assert.deepEqual(ids, Array.from({ length: 25 }, (_, i) => i));
   assert.match(result.headers.get('content-type'), /boundary=inboxzero_gmail_guard/);
@@ -160,7 +160,7 @@ const { requestDetails, installRequestContext } = require('./gmail-pacing.cjs');
 test('thread pages stay small while preserving filters and continuation tokens', () => {
   const result = requestDetails('/api/threads?type=inbox&limit=25&after=2026-10-01&nextPageToken=keep-me', 'GET');
   const parsed = new URL(result.url, 'http://inbox-zero');
-  assert.equal(parsed.searchParams.get('limit'), '10');
+  assert.equal(parsed.searchParams.get('limit'), '5');
   assert.equal(parsed.searchParams.get('nextPageToken'), 'keep-me');
   assert.equal(parsed.searchParams.get('after'), '2026-10-01');
   assert.equal(requestDetails('/api/threads?limit=5', 'GET').url, '/api/threads?limit=5');
@@ -213,7 +213,7 @@ test('HTTP request context preserves pagination and aborts after a premature res
     const response = Object.assign(new EventEmitter(), { writableEnded: false });
     let signal;
     server.on('request', () => {
-      assert.equal(request.url, '/api/threads?limit=10&nextPageToken=next');
+      assert.equal(request.url, '/api/threads?limit=5&nextPageToken=next');
       assert.equal(storage.getStore().priority, 1);
       signal = storage.getStore().signal;
     });
@@ -293,7 +293,7 @@ test('the pinned source factory is decorated exactly once and remains idempotent
 });
 
 test('mailbox protocol POST requests receive foreground priority', () => {
-  for (const endpoint of ['scopes', 'bootstrap', 'enumeration', 'changes', 'changes/batch', 'hydration', 'search']) {
+  for (const endpoint of ['scopes', 'bootstrap', 'changes', 'changes/batch', 'hydration', 'search']) {
     assert.equal(requestDetails('/api/mail/v1/accounts/account/' + endpoint, 'POST').priority, 1);
   }
   assert.equal(requestDetails('/api/cron/automation-jobs', 'GET').priority, 2);
@@ -314,4 +314,30 @@ test('automation cannot starve behind an uninterrupted foreground backfill', asy
   release();
   await Promise.all([background, ...foreground]);
   assert.equal(order.indexOf('automation'), 4);
+});
+
+
+test('archive enumeration yields to bulk operations and automatic processing', () => {
+  assert.equal(requestDetails('/api/mail/v1/accounts/account/enumeration', 'POST').priority, 3);
+  assert.equal(requestDetails('/api/threads?limit=25', 'GET').priority, 1);
+});
+
+test('quota feedback slows future traffic once per window and recovers gradually', async () => {
+  let clock = 0;
+  const delays = [];
+  const pace = createPacer({ now: () => clock, sleep: async delay => { delays.push(delay); clock += delay; } });
+  assert.equal(pace.congestion(), 12.5);
+  assert.equal(pace.congestion(), 12.5);
+  await pace(message);
+  await pace(message);
+  assert.deepEqual(delays, [0, 1600]);
+  clock = 65000;
+  assert.equal(pace.congestion(), 6.25);
+  await pace(message);
+  await pace(message);
+  assert.equal(delays.at(-1), 3200);
+  clock = 200000;
+  await pace(message);
+  await pace(message);
+  assert.equal(delays.at(-1), 2560);
 });
