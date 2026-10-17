@@ -294,3 +294,29 @@ increase of Google's limit. Existing adaptive cooldown/recovery remains active.
 
 References: [Gmail quotas](https://developers.google.com/workspace/gmail/api/reference/quota),
 [client synchronization](https://developers.google.com/workspace/gmail/api/guides/sync).
+
+Verification of the correction:
+- 49 regression tests passed, including format-dependent/default read costs,
+  scoped metadata rewriting, preserved continuation tokens, suppression of
+  automatic body hydration, and full content reads outside list sync.
+- In a fresh authenticated browser, the previous two 10-message pages took
+  15.3 and 28.5 seconds and carried ten full bodies each. Deployed metadata
+  pages took approximately 4.4–10.8 seconds and carried no bodies or required
+  hydration keys. Visible mailbox counts continued to increase.
+- Explicit full-body hydration returned content in 0.32–0.44 seconds. A separate
+  message selected by Gmail's `has:attachment filename:pdf` query returned its
+  PDF attachment descriptor through the normal hydration API. This tests the
+  descriptor path, not downloading the attachment bytes.
+- The final isolated browser check had zero browser errors and no automatic
+  body downloads before the explicit request. Short-lived diagnostic login
+  sessions were revoked after each run.
+- Runtime accounting recorded archive metadata reads at 20 units/request;
+  no quota cooldowns occurred during the checks. Argo reported Synced/Healthy,
+  scheduled Gmail polls succeeded, and all three repository CI checks passed.
+
+Import time still depends on competing work and the active browser cache. Both
+linked mailboxes and open browser imports share the 4,500-unit ceiling. Even
+without competing work, indexing 15,404 messages at 20 units each needs roughly
+69 minutes of quota time; it is not an instant download of the entire archive.
+Responsive list browsing and on-demand content do not require that import to
+finish. Other browsers maintain separate local caches and repeat their import.
