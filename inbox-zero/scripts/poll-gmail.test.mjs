@@ -89,3 +89,25 @@ test('invalid polling intervals cannot create a tight request loop', async () =>
     await assert.rejects(runPollingWindow({ intervalMs, poll: async () => assert.fail('must not poll') }), /interval/);
   }
 });
+
+
+test('repeated checks coalesce accepted history while allowing new history and next-window retries', async () => {
+  const notifiedHistory = new Map(), notifications = [];
+  const account = { id: 'account', lastSyncedHistoryId: '123' };
+  const notify = async (_, current) => notifications.push(current);
+  const poll = current => pollAccount({ account, current, notifiedHistory, notify });
+  assert.equal((await poll('124')).notified, true);
+  assert.equal((await poll('124')).notified, false);
+  assert.equal((await poll('125')).notified, true);
+  await pollAccount({ account, current: '125', notifiedHistory: new Map(), notify });
+  assert.deepEqual(notifications, ['124', '125', '125']);
+});
+
+test('a rejected webhook is never coalesced away on retry', async () => {
+  const notifiedHistory = new Map();
+  const input = { account: { id: 'account', lastSyncedHistoryId: '123' }, current: '124', notifiedHistory };
+  await assert.rejects(pollAccount({ ...input, notify: async () => { throw Error('unavailable'); } }), /unavailable/);
+  assert.equal(notifiedHistory.size, 0);
+  const result = await pollAccount({ ...input, notify: async () => {} });
+  assert.equal(result.notified, true);
+});
