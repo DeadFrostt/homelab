@@ -340,7 +340,13 @@ hydrated attachment evidence.
 The operation-executor hook has its own pinned compatibility guard at both image
 build and runtime startup. All 57 regression tests pass. The initial read-only
 production baseline fetched ten conversations in 18.2 seconds and returned
-664,865 HTML characters. Post-deployment checks are recorded separately.
+664,865 HTML characters. After deployment, the bounded ten-conversation page
+completed in 8.1 seconds with zero HTML/text body characters. A distinct next
+page also returned ten conversations successfully in 8.1 seconds. Complete
+conversation membership returned in 1.15 seconds; archive-state inspection
+returned in 0.58 seconds. These production checks were read-only and dispatched
+no archive/unsubscribe writes. Argo reported Synced/Healthy and the temporary
+diagnostic session was revoked.
 
 Bulk Unsubscribe still processes senders sequentially and can wait on external
 unsubscribe websites. This optimization reduces Gmail preparation/readback work;
