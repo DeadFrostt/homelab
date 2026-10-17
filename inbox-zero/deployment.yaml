@@ -27,7 +27,7 @@ spec:
       terminationGracePeriodSeconds: 60
       containers:
       - name: web
-        image: ghcr.io/deadfrostt/inbox-zero@sha256:3b773fa5b80bd6157c8d5247c45650eca0360a368124bdbf90890c8de1e5146e
+        image: ghcr.io/deadfrostt/inbox-zero@sha256:50ad69a2292c22a7c81582bdd7e33ceae3a87512a739bbe6211f50733fb1cf72
         imagePullPolicy: Never
         envFrom:
         - configMapRef:
@@ -68,15 +68,6 @@ spec:
             port: 3000
           periodSeconds: 30
           failureThreshold: 3
-        volumeMounts:
-        - name: gmail-runtime
-          mountPath: /app/gmail-pacing.cjs
-          subPath: gmail-pacing.cjs
-          readOnly: true
-      volumes:
-      - name: gmail-runtime
-        configMap:
-          name: inbox-zero-gmail-runtime
 ---
 apiVersion: v1
 kind: Service

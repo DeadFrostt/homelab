@@ -1,0 +1,16 @@
+{
+  "integration": "native-source-v1",
+  "source_repository": "DeadFrostt/inbox-zero",
+  "source_revision": "cf01515472ea7a8efe4d1ffd4a4e82f503ca8001",
+  "source_tree": "71550ca45d661eecfeb787970075bd9b97e0a38c",
+  "upstream_revision": "a281a644ea4c4cc91fbf327adfd91dc7755a6405",
+  "image": "ghcr.io/deadfrostt/inbox-zero@sha256:50ad69a2292c22a7c81582bdd7e33ceae3a87512a739bbe6211f50733fb1cf72",
+  "platform": "linux/arm64",
+  "build_run": "https://github.com/DeadFrostt/inbox-zero/actions/runs/39061510024",
+  "validation": {
+    "core_poller_tests": 59,
+    "application_tests": 174,
+    "production_build": "passed with TypeScript checks",
+    "staging": "migrations, DB-backed health, worker, UID1001, internal-only network; synthetic data"
+  }
+}
