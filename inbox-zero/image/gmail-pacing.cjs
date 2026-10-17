@@ -168,8 +168,10 @@ function patchAdapterSource(source) {
 const MAILBOX_FACTORY = '["createEmailProviderMailboxSource",0,function(e){let{provider:s,accountId:l}=e,m="microsoft"===s.name?20:50,';
 const MAILBOX_GUARDED_OLD = '["createEmailProviderMailboxSource",0,function inboxzeroMailboxSource(e){if(!e.__inboxzeroSyncGuard)return globalThis[Symbol.for("inboxzero.gmailPacing")].mailboxSource(inboxzeroMailboxSource({...e,__inboxzeroSyncGuard:true}),e.provider);let{provider:s,accountId:l}=e,m="microsoft"===s.name?20:50,';
 const MAILBOX_GUARDED = '["createEmailProviderMailboxSource",0,function inboxzeroMailboxSource(e){if(!e.__inboxzeroSyncGuard)return globalThis[Symbol.for("inboxzero.gmailPacing")].mailboxSource(inboxzeroMailboxSource({...e,provider:globalThis[Symbol.for("inboxzero.gmailPacing")].mailboxProvider(e.provider,e.accountId),__inboxzeroSyncGuard:true}),e.provider);let{provider:s,accountId:l}=e,m="microsoft"===s.name?20:50,';
+const OPERATION_FACTORY = '"createEmailProviderOperationExecutor",0,function(e){let{provider:t,accountId:a}=e;return{';
+const OPERATION_GUARDED = '"createEmailProviderOperationExecutor",0,function inboxzeroOperationExecutor(e){if(!e.__inboxzeroOperationsGuard)return globalThis[Symbol.for("inboxzero.gmailPacing")].operationExecutor(inboxzeroOperationExecutor({...e,__inboxzeroOperationsGuard:true}),e.provider);let{provider:t,accountId:a}=e;return{';
 function patchRuntimeSource(source) {
-  return patchAdapterSource(source).replaceAll(MAILBOX_GUARDED_OLD, MAILBOX_GUARDED).replaceAll(MAILBOX_FACTORY, MAILBOX_GUARDED);
+  return patchAdapterSource(source).replaceAll(MAILBOX_GUARDED_OLD, MAILBOX_GUARDED).replaceAll(MAILBOX_FACTORY, MAILBOX_GUARDED).replaceAll(OPERATION_FACTORY, OPERATION_GUARDED);
 }
 const LIVE_SCOPE = 'primary-live';
 // Read history cheaply in large pages, but hydrate at most ten messages per call.
@@ -301,6 +303,23 @@ function historyPosition(position) {
 function restoreReadFrom(result, position) {
   return result?.status === 'page' ? { ...result, page: { ...result.page, from: position } } : result;
 }
+function stripUnknownAttachmentFlags(values) {
+  return values?.map(change => {
+    if (change.kind !== 'message_patch' || change.fields?.hasAttachments !== false) return change;
+    const { hasAttachments, ...fields } = change.fields;
+    return { ...change, fields };
+  });
+}
+function decorateOperationExecutor(executor, provider, { runMetadata } = {}) {
+  if (provider.name !== 'google' || !runMetadata) return executor;
+  const wrap = method => async input => {
+    if (input.operation?.intent?.kind !== 'metadata') return executor[method](input);
+    const result = await runMetadata(() => executor[method](input));
+    return Array.isArray(result.observations)
+      ? { ...result, observations: stripUnknownAttachmentFlags(result.observations) } : result;
+  };
+  return { ...executor, execute: wrap('execute'), inspect: wrap('inspect') };
+}
 function decorateMailboxSource(source, provider, { runMetadata } = {}) {
   if (provider.name !== 'google') return source;
   const page = input => ({ ...input, pageSize: Math.min(input.pageSize || 10, 10) });
@@ -311,13 +330,8 @@ function decorateMailboxSource(source, provider, { runMetadata } = {}) {
     if (!runMetadata) return result;
     // Metadata omits MIME parts. An unknown attachment flag must not erase
     // attachment evidence obtained from a previously hydrated full body.
-    const changes = values => values?.map(change => {
-      if (change.kind !== 'message_patch' || change.fields?.hasAttachments !== false) return change;
-      const { hasAttachments, ...fields } = change.fields;
-      return { ...change, fields };
-    });
-    if (result.status === 'ok') return { ...result, value: { ...result.value, changes: changes(result.value.changes), requiredHydration: [], bodies: [] } };
-    if (result.status === 'page') return { ...result, page: { ...result.page, changes: changes(result.page.changes), requiredHydration: [] } };
+    if (result.status === 'ok') return { ...result, value: { ...result.value, changes: stripUnknownAttachmentFlags(result.value.changes), requiredHydration: [], bodies: [] } };
+    if (result.status === 'page') return { ...result, page: { ...result.page, changes: stripUnknownAttachmentFlags(result.page.changes), requiredHydration: [] } };
     return result;
   };
   return {
@@ -362,6 +376,12 @@ function decorateMailboxSource(source, provider, { runMetadata } = {}) {
       const results = await metadata(() => source.readChangesBatch(page({ ...input, reads: input.reads.map(read => ({ ...read, position: historyPosition(read.position) })) })));
       return results.map((result, i) => restoreReadFrom(listResult(result), input.reads[i].position));
     } } : {}),
+    ...(source.readConversationMembership ? { async readConversationMembership(input) {
+      const result = await metadata(() => source.readConversationMembership(input));
+      if (!runMetadata || result.status !== 'ok' || result.value.status !== 'page') return result;
+      return { ...result, value: { ...result.value, page: { ...result.value.page,
+        changes: stripUnknownAttachmentFlags(result.value.page.changes) } } };
+    } } : {}),
     ...(source.search ? { search: input => source.search(page(input)) } : {}),
   };
 }
@@ -370,6 +390,7 @@ function patchBundledTransport() {
   const directory = '/app/apps/web/.next/server/chunks';
   let matched = 0;
   let mailboxMatched = 0;
+  let operationMatched = 0;
   for (const file of fs.readdirSync(directory)) {
     if (!file.endsWith('.js')) continue;
     const target = directory + '/' + file;
@@ -377,13 +398,14 @@ function patchBundledTransport() {
     const patched = patchRuntimeSource(source);
     if (patched.includes(ADAPTER_MANAGED)) matched++;
     if (patched.includes(MAILBOX_GUARDED)) mailboxMatched++;
+    if (patched.includes(OPERATION_GUARDED)) operationMatched++;
     if (patched !== source) {
       const temporary = target + '.gmail-guard-' + process.pid;
       fs.writeFileSync(temporary, patched);
       fs.renameSync(temporary, target);
     }
   }
-  if (!matched || !mailboxMatched) throw new Error('No compatible Gmail adapter/mailbox source; refusing to start without sync protection');
+  if (!matched || !mailboxMatched || !operationMatched) throw new Error('No compatible Gmail adapter/mailbox source/operation executor; refusing to start without sync protection');
 }
 
 function boundaryFrom(headers) {
@@ -407,7 +429,7 @@ function metadataRead(input, options = {}) {
   const rewrite = value => {
     const url = new URL(value);
     if (!['gmail.googleapis.com', 'www.googleapis.com'].includes(url.hostname) ||
-        !/^\/gmail\/v1\/users\/[^/]+\/messages\/[^/]+$/.test(url.pathname)) return value;
+        !/^\/gmail\/v1\/users\/[^/]+\/(?:messages|threads)\/[^/]+$/.test(url.pathname)) return value;
     url.searchParams.set('format', 'metadata');
     return url.toString();
   };
@@ -499,8 +521,17 @@ function requestDetails(url, method) {
     const limit = Number(parsed.searchParams.get('limit'));
     if (!limit || limit > 5) parsed.searchParams.set('limit', '5');
   }
+  // Sender cleanup uses this exact inbox/fromEmail scan only to collect IDs.
+  // Keep every continuation token, and leave general thread previews untouched.
+  const cleanupScan = method === 'GET' && parsed.pathname === '/api/threads/basic' &&
+    Boolean(parsed.searchParams.get('fromEmail')?.trim()) && parsed.searchParams.get('labelId') === 'INBOX';
+  if (cleanupScan) {
+    const limit = Number(parsed.searchParams.get('limit'));
+    if (!Number.isFinite(limit) || limit <= 0 || limit > 10) parsed.searchParams.set('limit', '10');
+  }
   return {
     url: parsed.pathname + parsed.search,
+    ...(cleanupScan ? { metadataOnly: true } : {}),
     priority: /^\/api\/mail\/v1\/accounts\/[^/]+\/changes(?:\/batch)?$/.test(parsed.pathname) ? -1 : /^\/api\/mail\/v1\/accounts\/[^/]+\/enumeration$/.test(parsed.pathname) ? 3 : (method === 'GET' && !parsed.pathname.startsWith('/api/cron/')) || /^\/api\/mail\/v1\/accounts\/[^/]+\/(?:scopes|bootstrap|enumeration|changes(?:\/batch)?|hydration|search|assistant-state)$/.test(parsed.pathname) ? 1 : 2,
   };
 }
@@ -521,7 +552,7 @@ function installRequestContext(storage) {
       request.removeListener('aborted', abort);
       response.removeListener('close', close);
     });
-    return storage.run({ priority: details.priority, signal: controller.signal }, () => originalEmit.call(this, event, ...args));
+    return storage.run({ priority: details.priority, signal: controller.signal, metadataOnly: details.metadataOnly }, () => originalEmit.call(this, event, ...args));
   }
   Server.prototype.emit = emit;
   return () => { if (Server.prototype.emit === emit) Server.prototype.emit = originalEmit; };
@@ -539,6 +570,9 @@ function install() {
   pace.mailboxSource = (source, provider) => decorateMailboxSource(source, provider, {
     runMetadata: operation => storage.run({ ...context(), metadataOnly: true }, operation),
   });
+  pace.operationExecutor = (executor, provider) => decorateOperationExecutor(executor, provider, {
+    runMetadata: operation => storage.run({ ...context(), metadataOnly: true }, operation),
+  });
   const historyPager = createHistoryPager();
   pace.mailboxProvider = (provider, accountId) => decorateMailboxProvider(provider, accountId, historyPager);
   globalThis[SLOT] = pace;
@@ -547,5 +581,5 @@ function install() {
   globalThis.fetch = (input, options) => pace.transport(originalFetch, input, options);
 }
 
-module.exports = { metadataRead, RATE, requestCost, createPacer, createGmailTransport, patchAdapterSource, ADAPTER_PLAIN, ADAPTER_OLD, ADAPTER_MANAGED, requestDetails, installRequestContext, decorateMailboxSource, patchRuntimeSource, MAILBOX_FACTORY, MAILBOX_GUARDED, LIVE_SCOPE, historyPosition, createHistoryPager, decorateMailboxProvider, MAILBOX_GUARDED_OLD, install };
+module.exports = { OPERATION_FACTORY, OPERATION_GUARDED, decorateOperationExecutor, metadataRead, RATE, requestCost, createPacer, createGmailTransport, patchAdapterSource, ADAPTER_PLAIN, ADAPTER_OLD, ADAPTER_MANAGED, requestDetails, installRequestContext, decorateMailboxSource, patchRuntimeSource, MAILBOX_FACTORY, MAILBOX_GUARDED, LIVE_SCOPE, historyPosition, createHistoryPager, decorateMailboxProvider, MAILBOX_GUARDED_OLD, install };
 if (process.env.INBOXZERO_GMAIL_PACING === 'true') install();

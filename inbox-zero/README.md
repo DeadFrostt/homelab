@@ -320,3 +320,30 @@ without competing work, indexing 15,404 messages at 20 units each needs roughly
 69 minutes of quota time; it is not an instant download of the entire archive.
 Responsive list browsing and on-demand content do not require that import to
 finish. Other browsers maintain separate local caches and repeat their import.
+
+## Bulk cleanup read optimization
+
+The sender cleanup path fetched 100 full conversations per request before
+queuing archive commands. Those full thread reads cost 120 units each. Sender
+inbox scans now use at most ten conversations/page, preserving provider filters
+and continuation tokens, and request thread metadata (40 units each). This is
+scoped to `/api/threads/basic` with both `fromEmail` and `labelId=INBOX`; general
+thread previews retain full content.
+
+Conversation membership preparation and metadata-operation execution/inspection
+also request metadata. They retain complete message IDs, normal label reads,
+per-target outcomes and archive verification. Mutating calls are neither changed
+nor replayed by this guard. Send operations, body hydration and AI reads retain
+full content. Unknown attachment flags from metadata cannot erase previously
+hydrated attachment evidence.
+
+The operation-executor hook has its own pinned compatibility guard at both image
+build and runtime startup. All 57 regression tests pass. The initial read-only
+production baseline fetched ten conversations in 18.2 seconds and returned
+664,865 HTML characters. Post-deployment checks are recorded separately.
+
+Bulk Unsubscribe still processes senders sequentially and can wait on external
+unsubscribe websites. This optimization reduces Gmail preparation/readback work;
+it does not make external sites instantaneous. The shared 4,500-unit budget is
+unchanged. See [UPGRADING.md](UPGRADING.md) for controlled release upgrades and
+rollback limitations.
