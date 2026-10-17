@@ -13,7 +13,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - name: Test Gmail request pacing
-        run: node --test inbox-zero/image/gmail-pacing.test.cjs inbox-zero/image/gmail-history.test.cjs inbox-zero/image/gmail-cleanup.test.cjs inbox-zero/scripts/poll-gmail.test.mjs
-      - name: Check maintenance scripts
-        run: node --check inbox-zero/scripts/maintenance.mjs
+      - name: Test deployed Gmail poller
+        run: node --test inbox-zero/scripts/poll-gmail.test.mjs
+      - name: Check scripts
+        run: |
+          node --check inbox-zero/scripts/maintenance.mjs
+          bash -n inbox-zero/scripts/backup-image.sh inbox-zero/scripts/restore-image.sh
+      - name: Check native release provenance and every application image pin
+        run: |
+          python3 - <<'PYCODE'
+          import json, re
+          from pathlib import Path
+          root = Path('inbox-zero')
+          release = json.loads((root / 'release.json').read_text())
+          assert release['integration'] == 'native-source-v1'
+          assert release['platform'] == 'linux/arm64'
+          for key in ['source_revision', 'source_tree', 'upstream_revision']:
+              assert re.fullmatch('[a-f0-9]{40}', release[key]), key
+          assert re.fullmatch(r'ghcr\.io/deadfrostt/inbox-zero@sha256:[a-f0-9]{64}', release['image'])
+          pins = []
+          for name in ['deployment.yaml', 'worker.yaml', 'cronjobs.yaml', 'gmail-poller.yaml']:
+              text = (root / name).read_text()
+              pins.extend(re.findall(r'image:\s*(ghcr\.io/deadfrostt/inbox-zero@sha256:[a-f0-9]{64})', text))
+              assert 'gmail-runtime' not in text
+          assert len(pins) == 7 and set(pins) == {release['image']}
+          assert 'gmail-runtime' not in (root / 'kustomization.yaml').read_text()
+          print('All seven native release pins and source provenance match')
+          PYCODE

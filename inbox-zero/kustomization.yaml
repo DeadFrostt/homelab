@@ -16,9 +16,6 @@ resources:
 - cronjobs.yaml
 - gmail-poller.yaml
 configMapGenerator:
-- name: inbox-zero-gmail-runtime
-  files:
-  - gmail-pacing.cjs=image/gmail-pacing.cjs
 - name: inbox-zero-gmail-poller
   files:
   - poll-gmail.mjs=scripts/poll-gmail.mjs

@@ -32,7 +32,7 @@ spec:
               type: RuntimeDefault
           containers:
           - name: poll
-            image: ghcr.io/deadfrostt/inbox-zero@sha256:3b773fa5b80bd6157c8d5247c45650eca0360a368124bdbf90890c8de1e5146e
+            image: ghcr.io/deadfrostt/inbox-zero@sha256:50ad69a2292c22a7c81582bdd7e33ceae3a87512a739bbe6211f50733fb1cf72
             imagePullPolicy: Never
             command: [node, /app/poll-gmail.mjs]
             args: []
@@ -57,17 +57,10 @@ spec:
               mountPath: /app/poll-gmail.mjs
               subPath: poll-gmail.mjs
               readOnly: true
-            - name: gmail-runtime
-              mountPath: /app/gmail-pacing.cjs
-              subPath: gmail-pacing.cjs
-              readOnly: true
           volumes:
           - name: poll-script
             configMap:
               name: inbox-zero-gmail-poller
-          - name: gmail-runtime
-            configMap:
-              name: inbox-zero-gmail-runtime
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

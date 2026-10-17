@@ -5,12 +5,27 @@ umask 077
 source "${BACKUP_CONFIG_FILE:-/home/ubuntu/.config/docker-state-backup/config}"
 export AGE_RECIPIENT RCLONE_DESTINATION
 export BACKUP_RCLONE_CONFIG="${BACKUP_RCLONE_CONFIG:-/etc/homelab-dr/source-rclone.conf}"
-version=59cf6d2-pacing1
+release_file=${INBOXZERO_RELEASE_FILE:-$(dirname "$0")/../release.json}
+read -r version digest platform < <(python3 - "$release_file" <<'PYCODE'
+import json,re,sys
+release=json.load(open(sys.argv[1]))
+revision=release['source_revision'];image=release['image'];platform=release['platform']
+assert re.fullmatch(r'[a-f0-9]{40}',revision)
+assert re.fullmatch(r'ghcr\.io/deadfrostt/inbox-zero@sha256:[a-f0-9]{64}',image)
+assert platform=='linux/arm64'
+print('native-'+revision,image.split('@')[1],platform)
+PYCODE
+)
 image="ghcr.io/deadfrostt/inbox-zero:$version"
+actual=$(k3s ctr images list "name==$image" | awk 'NR == 2 {print $3}')
+if [[ "$actual" != "$digest" ]]; then
+  echo 'Imported image digest does not match release.json' >&2
+  exit 1
+fi
 work="/var/lib/homelab-dr/images/inbox-zero-$version"
 mkdir -p "$work"
 if [[ ! -s "$work/image.tar.gz.age" ]]; then
-  k3s ctr images export --local --platform linux/amd64 - "$image" |
+  k3s ctr images export --local --platform "$platform" - "$image" |
     gzip -1 | age -r "$AGE_RECIPIENT" -o "$work/image.tar.gz.age.incomplete"
   mv "$work/image.tar.gz.age.incomplete" "$work/image.tar.gz.age"
 fi
