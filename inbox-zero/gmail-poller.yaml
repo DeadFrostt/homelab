@@ -35,7 +35,7 @@ spec:
             image: ghcr.io/deadfrostt/inbox-zero@sha256:50ad69a2292c22a7c81582bdd7e33ceae3a87512a739bbe6211f50733fb1cf72
             imagePullPolicy: Never
             command: [node, /app/poll-gmail.mjs]
-            args: []
+            args: [--interval-seconds=15]
             envFrom:
             - configMapRef:
                 name: inbox-zero-config

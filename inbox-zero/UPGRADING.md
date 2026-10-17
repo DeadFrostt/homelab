@@ -42,3 +42,8 @@ cannot download recovery files.
 The previous compiled-patch image and its encrypted legacy artifact remain
 available for rollback. Neither image backup changes the shared database
 recovery snapshot policy.
+
+The Gmail fallback CronJob starts every minute and runs sequential checks every
+15 seconds (`--interval-seconds=15`). Slow passes skip missed ticks; failures
+stop the window and retain the Job retry/backoff policy. Keep this argument when
+updating the poller.

@@ -110,8 +110,30 @@ export async function runPoller({ env = process.env, fetchImpl = fetch, checkOnl
   } finally { await db.end(); }
 }
 
+// A CronJob still starts once per minute. Skip missed ticks after slow work so
+// short polling never overlaps account processing or bursts after a delay.
+export async function runPollingWindow({ poll, intervalMs = 15000, now = Date.now,
+  sleep = ms => new Promise(resolve => setTimeout(resolve, ms)) } = {}) {
+  if (!Number.isInteger(intervalMs) || intervalMs < 5000 || intervalMs > 60000) {
+    throw new Error('Polling interval must be between 5 and 60 seconds');
+  }
+  const start = now();
+  const deadline = start + 60000;
+  let next = start;
+  while (next < deadline) {
+    await sleep(Math.max(0, next - now()));
+    if (now() >= deadline) break;
+    await poll();
+    next += intervalMs;
+    if (next < now()) next = start + Math.ceil((now() - start) / intervalMs) * intervalMs;
+  }
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  runPoller({ checkOnly: process.argv.includes('--check') }).catch(error => {
+  const interval = process.argv.find(arg => arg.startsWith('--interval-seconds='));
+  const poll = () => runPoller({ checkOnly: process.argv.includes('--check') });
+  const run = interval ? runPollingWindow({ poll, intervalMs: Number(interval.split('=')[1]) * 1000 }) : poll();
+  run.catch(error => {
     console.error(JSON.stringify({ event: 'gmail-poll-failed', stage: error.stage || 'runtime', status: error.status, code: error.code || error.name }));
     process.exitCode = 1;
   });

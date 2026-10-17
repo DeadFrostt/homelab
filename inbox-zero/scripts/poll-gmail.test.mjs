@@ -52,3 +52,40 @@ test('polling waits through an app restart and requires database-backed readines
   assert.equal(calls, 3);
   assert.equal(clock, 6000);
 });
+
+
+test('15-second polling checks four times per minute without overlapping passes', async () => {
+  const { runPollingWindow } = await import('./poll-gmail.mjs');
+  let clock = 0, active = false;
+  const starts = [];
+  await runPollingWindow({ now: () => clock, sleep: async ms => { clock += ms; }, poll: async () => {
+    assert.equal(active, false);
+    active = true; starts.push(clock); clock += 2000;
+    await Promise.resolve(); active = false;
+  } });
+  assert.deepEqual(starts, [0, 15000, 30000, 45000]);
+});
+
+test('slow polling skips missed ticks rather than issuing catch-up bursts', async () => {
+  const { runPollingWindow } = await import('./poll-gmail.mjs');
+  let clock = 0;
+  const starts = [];
+  await runPollingWindow({ now: () => clock, sleep: async ms => { clock += ms; }, poll: async () => {
+    starts.push(clock); clock += 22000;
+  } });
+  assert.deepEqual(starts, [0, 30000]);
+});
+
+test('polling failures stop the window and leave retry/backoff to the scheduler', async () => {
+  const { runPollingWindow } = await import('./poll-gmail.mjs');
+  let calls = 0;
+  await assert.rejects(runPollingWindow({ poll: async () => { calls++; throw Error('quota'); } }), /quota/);
+  assert.equal(calls, 1);
+});
+
+test('invalid polling intervals cannot create a tight request loop', async () => {
+  const { runPollingWindow } = await import('./poll-gmail.mjs');
+  for (const intervalMs of [0, -1, NaN, 1000, 61000]) {
+    await assert.rejects(runPollingWindow({ intervalMs, poll: async () => assert.fail('must not poll') }), /interval/);
+  }
+});
