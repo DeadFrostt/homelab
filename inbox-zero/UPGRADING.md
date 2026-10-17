@@ -36,7 +36,9 @@ migrations or completed Gmail actions. Assess schema compatibility first.
 
 The recovery image scripts read `release.json` for the current source revision,
 image digest and platform. Back up the newly imported release with
-`scripts/backup-image.sh`; `scripts/restore-image.sh` restores that release.
+`scripts/backup-image.sh`; `scripts/restore-image.sh` restores that release using the separately held age
+identity and a read-capable recovery rclone configuration. The source upload key
+cannot download recovery files.
 The previous compiled-patch image and its encrypted legacy artifact remain
 available for rollback. Neither image backup changes the shared database
 recovery snapshot policy.

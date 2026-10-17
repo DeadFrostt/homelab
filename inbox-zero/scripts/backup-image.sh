@@ -31,7 +31,9 @@ if [[ ! -s "$work/image.tar.gz.age" ]]; then
 fi
 (cd "$work" && sha256sum image.tar.gz.age > SHA256SUMS)
 remote="${RCLONE_DESTINATION%/}/portable/yeager/image-artifacts/inbox-zero-$version"
-env -u JOURNAL_STREAM rclone --config "$BACKUP_RCLONE_CONFIG" copy "$work" "$remote" --transfers 1 --checkers 2
+# The restricted B2 upload key cannot use the download HEAD request made by
+# generic multi-thread copies. Use the backend uploader and verify native hashes.
+env -u JOURNAL_STREAM rclone --config "$BACKUP_RCLONE_CONFIG" copy "$work" "$remote" --transfers 1 --checkers 2 --multi-thread-streams 0 --checksum
 python3 - "$work" "$remote" <<'PY'
 import sys,os,runpy
 sys.path.insert(0,'/usr/local/lib/homelab-dr')

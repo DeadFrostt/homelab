@@ -3,7 +3,8 @@ set -euo pipefail
 umask 077
 : "${AGE_IDENTITY_FILE:?Set the path to the separately held age recovery identity}"
 source "${BACKUP_CONFIG_FILE:-/home/ubuntu/.config/docker-state-backup/config}"
-config=${BACKUP_RCLONE_CONFIG:-/etc/homelab-dr/source-rclone.conf}
+: "${BACKUP_RCLONE_CONFIG:?Set a recovery rclone config with read access; the source upload key cannot download} "
+config=$BACKUP_RCLONE_CONFIG
 release_file=${INBOXZERO_RELEASE_FILE:-$(dirname "$0")/../release.json}
 read -r version digest platform < <(python3 - "$release_file" <<'PYCODE'
 import json,re,sys
