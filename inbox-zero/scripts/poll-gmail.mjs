@@ -30,15 +30,20 @@ class PollError extends Error {
   constructor(stage, status) { super(stage); this.stage = stage; this.status = status; }
 }
 
-export async function pollAccount({ account, current, initialize, notify, checkOnly = false }) {
+export async function pollAccount({ account, current, initialize, notify, checkOnly = false, notifiedHistory }) {
   const action = pollAction(current, account.lastSyncedHistoryId);
   if (checkOnly) return { action, notified: false };
   if (action === 'initialize') {
     // Starting automation must not unexpectedly replay the entire existing inbox.
     await initialize(account.id, current);
   }
-  if (action === 'notify') await notify(account, current);
-  return { action, notified: action === 'notify' };
+  let notified = false;
+  if (action === 'notify' && notifiedHistory?.get(account.id) !== current) {
+    await notify(account, current);
+    notifiedHistory?.set(account.id, current);
+    notified = true;
+  }
+  return { action, notified };
 }
 
 export async function waitForAppReady({ env, fetchImpl, now = Date.now, sleep = ms => new Promise(resolve => setTimeout(resolve, ms)) }) {
@@ -55,7 +60,7 @@ export async function waitForAppReady({ env, fetchImpl, now = Date.now, sleep = 
   throw new PollError('app-not-ready');
 }
 
-export async function runPoller({ env = process.env, fetchImpl = fetch, checkOnly = false } = {}) {
+export async function runPoller({ env = process.env, fetchImpl = fetch, checkOnly = false, notifiedHistory } = {}) {
   if (!env.GOOGLE_PUBSUB_VERIFICATION_TOKEN?.trim()) throw new PollError('missing-webhook-verification-token');
   await waitForAppReady({ env, fetchImpl });
   const { Client } = require(require.resolve('pg', { paths: ['/app/apps/web'] }));
@@ -87,7 +92,7 @@ export async function runPoller({ env = process.env, fetchImpl = fetch, checkOnl
       if (response.status === 401) { await refresh(); response = await profile(); }
       if (!response.ok) throw new PollError('gmail-profile', response.status);
       const { historyId } = await response.json();
-      const result = await pollAccount({ account, current: String(historyId), checkOnly,
+      const result = await pollAccount({ account, current: String(historyId), checkOnly, notifiedHistory,
         initialize: async (id, current) => db.query('UPDATE "EmailAccount" SET "lastSyncedHistoryId" = $1 WHERE id = $2 AND ("lastSyncedHistoryId" IS NULL OR "lastSyncedHistoryId" = \'\')', [current, id]),
         notify: async (target, current) => {
           const endpoint = new URL('/api/google/webhook', env.INTERNAL_API_URL || 'http://inbox-zero:3000');
@@ -110,8 +115,33 @@ export async function runPoller({ env = process.env, fetchImpl = fetch, checkOnl
   } finally { await db.end(); }
 }
 
+// A CronJob still starts once per minute. Skip missed ticks after slow work so
+// short polling never overlaps account processing or bursts after a delay.
+export async function runPollingWindow({ poll, intervalMs = 15000, now = Date.now,
+  sleep = ms => new Promise(resolve => setTimeout(resolve, ms)) } = {}) {
+  if (!Number.isInteger(intervalMs) || intervalMs < 5000 || intervalMs > 60000) {
+    throw new Error('Polling interval must be between 5 and 60 seconds');
+  }
+  const start = now();
+  const deadline = start + 60000;
+  let next = start;
+  while (next < deadline) {
+    await sleep(Math.max(0, next - now()));
+    if (now() >= deadline) break;
+    await poll();
+    next += intervalMs;
+    if (next < now()) next = start + Math.ceil((now() - start) / intervalMs) * intervalMs;
+  }
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  runPoller({ checkOnly: process.argv.includes('--check') }).catch(error => {
+  const interval = process.argv.find(arg => arg.startsWith('--interval-seconds='));
+  // Coalesce accepted notifications while server processing catches up. A new
+  // minute Job retries pending history if asynchronous processing had failed.
+  const notifiedHistory = new Map();
+  const poll = () => runPoller({ checkOnly: process.argv.includes('--check'), notifiedHistory });
+  const run = interval ? runPollingWindow({ poll, intervalMs: Number(interval.split('=')[1]) * 1000 }) : poll();
+  run.catch(error => {
     console.error(JSON.stringify({ event: 'gmail-poll-failed', stage: error.stage || 'runtime', status: error.status, code: error.code || error.name }));
     process.exitCode = 1;
   });
