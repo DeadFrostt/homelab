@@ -3,7 +3,7 @@
 // Single-process pacing shared by linked mailboxes. The worker forwards
 // mailbox work to the web process. Keep below Gmail's 6,000 units/minute.
 const SLOT = Symbol.for('inboxzero.gmailPacing');
-const RATE = 25; // 1,500 units/minute; tolerate lower effective Gmail limits.
+const RATE = 75; // 4,500 actual units/minute, shared across linked mailboxes.
 
 function requestCost(input, options = {}) {
   let url;
@@ -21,17 +21,24 @@ function requestCost(input, options = {}) {
     return requests.reduce((sum, match) => sum + requestCost('https://gmail.googleapis.com' + match[2], { method: match[1] }), 0);
   }
   if (!path.startsWith('/gmail/v1/')) return 0;
-  if (/\/(send|watch|import)$/.test(path)) return 100;
+  const format = (url.searchParams.get('format') || 'full').toLowerCase();
+  const bodyFormat = !['metadata', 'minimal'].includes(format);
+  if (/\/(send|watch)$/.test(path)) return 100;
+  if (/\/(import|insert)$/.test(path)) return 25;
   if (/\/(batchDelete|batchModify|stop)$/.test(path)) return 50;
-  if (/\/(trash|untrash)$/.test(path)) return 20;
+  if (/\/trash$/.test(path)) return 20;
+  if (/\/untrash$/.test(path)) return path.includes('/threads/') ? 10 : 5;
+  if (/\/modify$/.test(path)) return path.includes('/threads/') ? 10 : 5;
   if (/\/profile$/.test(path)) return 1;
   if (/\/history$/.test(path)) return 2;
   if (/\/labels(?:\/[^/]+)?$/.test(path)) return method === 'GET' ? 1 : 5;
   if (/\/attachments\//.test(path)) return 20;
-  if (/\/threads\/[^/]+$/.test(path)) return method === 'GET' ? 40 : 20;
+  if (/\/threads\/[^/]+$/.test(path)) return method === 'GET' ? (bodyFormat ? 120 : 40) : 20;
   if (/\/threads$/.test(path)) return 10;
-  if (/\/messages\/[^/]+$/.test(path)) return method === 'GET' ? 20 : 10;
-  if (/\/messages$/.test(path)) return 5;
+  if (/\/messages\/[^/]+$/.test(path)) return method === 'GET' ? (bodyFormat ? 60 : 20) : 10;
+  if (/\/messages$/.test(path)) return method === 'GET' ? 5 : 25;
+  if (/\/drafts\/[^/]+$/.test(path)) return method === 'GET' ? (bodyFormat ? 60 : 20) : method === 'PUT' ? 15 : 10;
+  if (/\/drafts$/.test(path)) return method === 'GET' ? 5 : 10;
   // Conservative fallback for Gmail operations outside the sync paths.
   return 100;
 }
@@ -47,6 +54,7 @@ function createPacer({ now = Date.now, sleep = abortableSleep, unitsPerSecond = 
   let recoveryAt = 0;
   const queue = [];
   let grantedUnits = 0, grantedRequests = 0, maxWaitMs = 0;
+  let byPriority = {};
   function remove(entry) {
     const index = queue.indexOf(entry);
     if (index >= 0) queue.splice(index, 1);
@@ -89,6 +97,8 @@ function createPacer({ now = Date.now, sleep = abortableSleep, unitsPerSecond = 
           availableAt = Math.max(now(), availableAt, blockedUntil) + Math.ceil(entry.cost * 1000 / effectiveRate);
           grantedUnits += entry.cost;
           grantedRequests++;
+          const bucket = byPriority[entry.priority] ||= { units: 0, requests: 0 };
+          bucket.units += entry.cost; bucket.requests++;
           maxWaitMs = Math.max(maxWaitMs, now() - entry.enqueuedAt);
           remove(entry);
           if (entry.priority === -1) realtimeStreak++; else realtimeStreak = 0;
@@ -120,8 +130,8 @@ function createPacer({ now = Date.now, sleep = abortableSleep, unitsPerSecond = 
     blockedUntil = Math.max(blockedUntil, now() + milliseconds);
   };
   pace.stats = () => {
-    const result = { grantedUnits, grantedRequests, maxWaitMs, queuedRequests: queue.length, unitsPerSecond: effectiveRate };
-    grantedUnits = 0; grantedRequests = 0; maxWaitMs = 0;
+    const result = { grantedUnits, grantedRequests, maxWaitMs, queuedRequests: queue.length, unitsPerSecond: effectiveRate, byPriority };
+    grantedUnits = 0; grantedRequests = 0; maxWaitMs = 0; byPriority = {};
     return result;
   };
   pace.congestion = () => {
@@ -291,9 +301,25 @@ function historyPosition(position) {
 function restoreReadFrom(result, position) {
   return result?.status === 'page' ? { ...result, page: { ...result.page, from: position } } : result;
 }
-function decorateMailboxSource(source, provider) {
+function decorateMailboxSource(source, provider, { runMetadata } = {}) {
   if (provider.name !== 'google') return source;
   const page = input => ({ ...input, pageSize: Math.min(input.pageSize || 10, 10) });
+  const metadata = operation => runMetadata ? runMetadata(operation) : operation();
+  // Metadata already supplies list fields. Missing bodies stay missing until the
+  // UI requests content; never store a snippet as a complete message body.
+  const listResult = result => {
+    if (!runMetadata) return result;
+    // Metadata omits MIME parts. An unknown attachment flag must not erase
+    // attachment evidence obtained from a previously hydrated full body.
+    const changes = values => values?.map(change => {
+      if (change.kind !== 'message_patch' || change.fields?.hasAttachments !== false) return change;
+      const { hasAttachments, ...fields } = change.fields;
+      return { ...change, fields };
+    });
+    if (result.status === 'ok') return { ...result, value: { ...result.value, changes: changes(result.value.changes), requiredHydration: [], bodies: [] } };
+    if (result.status === 'page') return { ...result, page: { ...result.page, changes: changes(result.page.changes), requiredHydration: [] } };
+    return result;
+  };
   return {
     ...source,
     async describe(input) {
@@ -321,20 +347,20 @@ function decorateMailboxSource(source, provider) {
     },
     async enumerate(input) {
       let token;
-      try { token = JSON.parse(input.page); } catch { return source.enumerate(page(input)); }
+      try { token = JSON.parse(input.page); } catch { return listResult(await metadata(() => source.enumerate(page(input)))); }
       if (token.scopeId === LIVE_SCOPE) {
         if (!token.catchUpFrom?.checkpoint) return { status: 'paused', reason: 'unavailable', retryAfterMs: 5000 };
         return { status: 'ok', value: { bootstrapId: input.bootstrapId, scopeId: LIVE_SCOPE,
           changes: [], requiredHydration: [], bodies: [], nextPage: null, catchUpFrom: token.catchUpFrom } };
       }
-      return source.enumerate(page(input));
+      return listResult(await metadata(() => source.enumerate(page(input))));
     },
     async readChanges(input) {
-      return restoreReadFrom(await source.readChanges(page({ ...input, position: historyPosition(input.position) })), input.position);
+      return restoreReadFrom(listResult(await metadata(() => source.readChanges(page({ ...input, position: historyPosition(input.position) })))), input.position);
     },
     ...(source.readChangesBatch ? { async readChangesBatch(input) {
-      const results = await source.readChangesBatch(page({ ...input, reads: input.reads.map(read => ({ ...read, position: historyPosition(read.position) })) }));
-      return results.map((result, i) => restoreReadFrom(result, input.reads[i].position));
+      const results = await metadata(() => source.readChangesBatch(page({ ...input, reads: input.reads.map(read => ({ ...read, position: historyPosition(read.position) })) })));
+      return results.map((result, i) => restoreReadFrom(listResult(result), input.reads[i].position));
     } } : {}),
     ...(source.search ? { search: input => source.search(page(input)) } : {}),
   };
@@ -377,6 +403,30 @@ function partRateLimited(part) {
   catch { return status === 429; }
 }
 
+function metadataRead(input, options = {}) {
+  const rewrite = value => {
+    const url = new URL(value);
+    if (!['gmail.googleapis.com', 'www.googleapis.com'].includes(url.hostname) ||
+        !/^\/gmail\/v1\/users\/[^/]+\/messages\/[^/]+$/.test(url.pathname)) return value;
+    url.searchParams.set('format', 'metadata');
+    return url.toString();
+  };
+  const method = String(options.method || input?.method || 'GET').toUpperCase();
+  const url = new URL(input?.url || input);
+  if (method === 'GET') {
+    const rewritten = rewrite(url.toString());
+    return { input: typeof Request !== 'undefined' && input instanceof Request ? new Request(rewritten, input) : rewritten, options };
+  }
+  if (url.pathname === '/batch/gmail/v1' && typeof options.body === 'string') {
+    const body = options.body.replace(/^GET (\/gmail\/v1\/[^\s]+)/gm, (_, path) => {
+      const rewritten = new URL(rewrite('https://gmail.googleapis.com' + path));
+      return 'GET ' + rewritten.pathname + rewritten.search;
+    });
+    return { input, options: { ...options, body } };
+  }
+  return { input, options };
+}
+
 function createGmailTransport(pace, { cooldownMs = 65000, log = console.info, context = () => null } = {}) {
   function quotaCooldown(response) {
     const retryAfter = response.headers.get('retry-after');
@@ -410,6 +460,7 @@ function createGmailTransport(pace, { cooldownMs = 65000, log = console.info, co
   }
   return async function transport(fetchImplementation, input, options = {}) {
     if (!requestCost(input, options)) return fetchImplementation(input, options);
+    if (context()?.metadataOnly) ({ input, options } = metadataRead(input, options));
     const requestSignal = context()?.signal;
     if (requestSignal) {
       const signals = [options.signal || input?.signal, requestSignal].filter(Boolean);
@@ -485,7 +536,9 @@ function install() {
   const pace = createPacer({ context });
   setInterval(() => console.info('[gmail-guard] ' + JSON.stringify({ event: 'pacing-window', ...pace.stats() })), 60000).unref();
   pace.transport = createGmailTransport(pace, { context });
-  pace.mailboxSource = decorateMailboxSource;
+  pace.mailboxSource = (source, provider) => decorateMailboxSource(source, provider, {
+    runMetadata: operation => storage.run({ ...context(), metadataOnly: true }, operation),
+  });
   const historyPager = createHistoryPager();
   pace.mailboxProvider = (provider, accountId) => decorateMailboxProvider(provider, accountId, historyPager);
   globalThis[SLOT] = pace;
@@ -494,5 +547,5 @@ function install() {
   globalThis.fetch = (input, options) => pace.transport(originalFetch, input, options);
 }
 
-module.exports = { requestCost, createPacer, createGmailTransport, patchAdapterSource, ADAPTER_PLAIN, ADAPTER_OLD, ADAPTER_MANAGED, requestDetails, installRequestContext, decorateMailboxSource, patchRuntimeSource, MAILBOX_FACTORY, MAILBOX_GUARDED, LIVE_SCOPE, historyPosition, createHistoryPager, decorateMailboxProvider, MAILBOX_GUARDED_OLD, install };
+module.exports = { metadataRead, RATE, requestCost, createPacer, createGmailTransport, patchAdapterSource, ADAPTER_PLAIN, ADAPTER_OLD, ADAPTER_MANAGED, requestDetails, installRequestContext, decorateMailboxSource, patchRuntimeSource, MAILBOX_FACTORY, MAILBOX_GUARDED, LIVE_SCOPE, historyPosition, createHistoryPager, decorateMailboxProvider, MAILBOX_GUARDED_OLD, install };
 if (process.env.INBOXZERO_GMAIL_PACING === 'true') install();

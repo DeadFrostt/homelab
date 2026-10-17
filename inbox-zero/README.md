@@ -40,8 +40,13 @@ not refresh automatically.
 The upstream app can exhaust Gmail's per-user minute budget during catch-up.
 The image patches its bundled Gaxios adapter to use a shared in-process transport;
 the runtime also covers direct multipart Gmail batch requests. It accounts for
-subrequest quota costs and spaces work at a maximum of **1,500 units/minute**,
+format-dependent subrequest quota costs and spaces work at a maximum of **4,500 actual units/minute**,
 splitting read-only batches into at most **two requests** to avoid large bursts.
+Full/default/raw message reads cost 60 units; metadata/minimal reads cost 20.
+Full thread reads cost 120 units. These are the current Gmail API costs for
+this project's 6,000-unit per-user quota. The shared ceiling leaves 1,500
+units/minute of headroom even if one mailbox consumes every slot. All linked
+accounts currently share this ceiling, rather than each receiving a separate budget.
 Quota failures halve the effective rate (once per minute, down to one eighth
 of the maximum); after two quiet minutes it recovers gradually.
 Quota errors, including errors inside HTTP-200 multipart responses, pause all
@@ -82,6 +87,14 @@ preserve import progress. Newly added inbox messages are processed
 before pending label changes, including arrivals received while an earlier
 backlog is still pending. Legacy history-page continuations are re-listed from
 their original history ID so new arrivals are not left behind old label pages.
+Initial enumeration and live change reads request Gmail `format=metadata`,
+so subjects, previews, senders, timestamps and labels load without downloading
+all message bodies. These list-only responses neither store snippet fallbacks
+as complete bodies nor enqueue automatic body hydration for every imported item.
+Opening a message uses the existing full body/attachment hydration path. Provider
+search and AI/automation reads retain full content. Browser checkpoints and cached
+mail are preserved. Minute pacing logs include per-priority request/unit totals.
+
 Pending IDs are scoped to the authenticated mailbox in a bounded, expiring
 in-process cache. The opaque cursor also retains the original replay baseline;
 cache eviction or an app restart replays history instead of losing pending
@@ -266,3 +279,18 @@ affected existing browser and confirmed its count was increasing beyond 66.
 Argo reported Synced/Healthy, polling jobs succeeded, and no Gmail quota errors
 were recorded in the final six-minute observation. Full archive import remains
 incremental; this is not a claim that all older mail is already cached.
+
+## Import quota accounting correction
+
+The prior guard counted full message reads as 20 units, while Gmail currently
+charges 60. This understated request costs and explains quota failures despite
+apparently conservative local totals. A 6,000-unit budget permits only about
+100 full message reads/minute before other calls, rather than 6,000 emails/minute.
+Metadata-first import uses 20 units/message and avoids immediate repeated body
+hydration during live catch-up. The previous 1,500 locally counted units/minute
+was close to 4,500 actual units/minute when dominated by full message reads.
+The new 4,500 ceiling is therefore an accurately counted ceiling, not a blind
+increase of Google's limit. Existing adaptive cooldown/recovery remains active.
+
+References: [Gmail quotas](https://developers.google.com/workspace/gmail/api/reference/quota),
+[client synchronization](https://developers.google.com/workspace/gmail/api/guides/sync).

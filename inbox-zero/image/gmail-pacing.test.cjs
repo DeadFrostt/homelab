@@ -1,18 +1,19 @@
 'use strict';
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
-const { requestCost, createPacer } = require('./gmail-pacing.cjs');
-const message = 'https://gmail.googleapis.com/gmail/v1/users/me/messages/example';
+const { requestCost, createPacer: productionPacer } = require('./gmail-pacing.cjs');
+const createPacer = options => productionPacer({ unitsPerSecond: 25, ...options });
+const message = 'https://gmail.googleapis.com/gmail/v1/users/me/messages/example?format=metadata';
 
 test('counts Gmail read and multipart costs without pacing other services', () => {
   assert.equal(requestCost(message), 20);
-  assert.equal(requestCost('https://gmail.googleapis.com/gmail/v1/users/me/threads/example'), 40);
+  assert.equal(requestCost('https://gmail.googleapis.com/gmail/v1/users/me/threads/example'), 120);
   assert.equal(requestCost('https://gmail.googleapis.com/gmail/v1/users/me/messages'), 5);
   assert.equal(requestCost('https://gmail.googleapis.com/gmail/v1/users/me/labels'), 1);
   assert.equal(requestCost('https://api.lithosai.cloud/v1/chat/completions'), 0);
   assert.equal(requestCost('http://redis-http:80'), 0);
   const body = Array.from({ length: 25 }, (_, i) => `--batch_boundary\nContent-Type: application/http\n\nGET /gmail/v1/users/me/messages/${i}?format=full\n\n`).join('');
-  assert.equal(requestCost('https://www.googleapis.com/batch/gmail/v1', { method: 'POST', body }), 500);
+  assert.equal(requestCost('https://www.googleapis.com/batch/gmail/v1', { method: 'POST', body }), 1500);
   assert.throws(() => requestCost('https://www.googleapis.com/batch/gmail/v1', { method: 'POST', body: 'unexpected' }));
 });
 
@@ -28,7 +29,7 @@ test('concurrent calls reserve one shared quota timeline', async () => {
 test('batch reserves the aggregate cost before following requests', async () => {
   const delays = [];
   const pace = createPacer({ now: () => 0, sleep: async delay => { delays.push(delay); } });
-  const body = 'GET /gmail/v1/users/me/messages/a\nGET /gmail/v1/users/me/threads/b\n';
+  const body = 'GET /gmail/v1/users/me/messages/a?format=metadata\nGET /gmail/v1/users/me/threads/b?format=metadata\n';
   await pace('https://www.googleapis.com/batch/gmail/v1', { method: 'POST', body });
   await pace(message);
   assert.deepEqual(delays, [0, 2400]);
@@ -107,7 +108,7 @@ test('large read batches become batches of two and retain all results in order',
     return batchResponse(ids);
   }, batchUrl, batchOptions(25));
   assert.deepEqual(sizes, [...Array(12).fill(2), 1]);
-  assert.deepEqual(costs, [...Array(12).fill(40), 20]);
+  assert.deepEqual(costs, [...Array(12).fill(120), 60]);
   const ids = [...(await result.text()).matchAll(/"id":"(\d+)"/g)].map(match => Number(match[1]));
   assert.deepEqual(ids, Array.from({ length: 25 }, (_, i) => i));
   assert.match(result.headers.get('content-type'), /boundary=inboxzero_gmail_guard/);
@@ -143,7 +144,7 @@ test('non-quota 403s and mutating requests are not automatically replayed', asyn
   const transport = createGmailTransport(pace, { log: () => {} });
   let calls = 0;
   await transport(async () => { calls++; return new Response('{"error":{"errors":[{"reason":"forbidden"}]}}', { status: 403 }); }, message);
-  await transport(async () => { calls++; return quotaResponse(); }, message + '/modify', { method: 'POST' });
+  await transport(async () => { calls++; return quotaResponse(); }, message.split('?')[0] + '/modify', { method: 'POST' });
   assert.equal(calls, 2);
   assert.deepEqual(cooldowns, [65000]);
 });
@@ -411,4 +412,71 @@ test('live message reads bypass an aged backlog while still reserving background
   release();await Promise.all([archive,...live]);
   assert.deepEqual(order.slice(0,4),['live-0','live-1','live-2','live-3']);
   assert.equal(order[4],'archive');
+});
+
+test('current Gmail costs distinguish content, metadata, defaults, and mutations', () => {
+  const base = 'https://gmail.googleapis.com/gmail/v1/users/me/';
+  for (const resource of ['messages', 'drafts', 'threads']) {
+    const factor = resource === 'threads' ? 2 : 1;
+    for (const format of ['', '?format=full', '?format=raw']) assert.equal(requestCost(base + resource + '/id' + format), 60 * factor);
+    for (const format of ['metadata', 'minimal']) assert.equal(requestCost(base + resource + '/id?format=' + format), 20 * factor);
+  }
+  for (const [path, method, cost] of [['messages/id/modify','POST',5],['threads/id/modify','POST',10],['messages/id/untrash','POST',5],['drafts','POST',10],['drafts/id','PUT',15],['messages/import','POST',25]]) {
+    assert.equal(requestCost(base + path, { method }), cost);
+  }
+  assert.equal(productionPacer().stats().unitsPerSecond, 75);
+});
+
+test('list sync uses metadata while opening a message and AI still retrieve full bodies', async () => {
+  const { AsyncLocalStorage } = require('node:async_hooks');
+  const storage = new AsyncLocalStorage();
+  const requests = [];
+  const costs = [];
+  const transport = createGmailTransport(async (input, options) => costs.push(requestCost(input, options)), {context: () => storage.getStore(),log:()=>{}});
+  const fetcher = async input => {requests.push(new URL(input).searchParams.get('format'));return new Response('{}');};
+  const get = () => transport(fetcher, 'https://gmail.googleapis.com/gmail/v1/users/me/messages/id?format=full');
+  const key = { accountId:'account', messageId:'id' };
+  const source = {
+    enumerate: async () => {await get();return {status:'ok',value:{changes:[{kind:'message_patch',key,fields:{subject:'metadata',hasAttachments:false}}],requiredHydration:[key],bodies:[{key,text:'snippet fallback'}],nextPage:'keep'}};},
+    readChanges: async input => {await get();return {status:'page',page:{from:input.position,to:input.position,changes:[],requiredHydration:[key]}};},
+    hydrate: async () => {await get();return {status:'ok',value:{bodies:[{key,text:'full content'}]}};},
+  };
+  source.readChangesBatch = async input => Promise.all(input.reads.map(read=>source.readChanges(read)));
+  const wrapped = decorateMailboxSource(source,{name:'google'},{runMetadata: fn=>storage.run({metadataOnly:true},fn)});
+  const imported = await wrapped.enumerate({page:JSON.stringify({scopeId:'primary'}),pageSize:10});
+  assert.equal(imported.value.changes.length,1);
+  assert.equal(Object.hasOwn(imported.value.changes[0].fields,'hasAttachments'),false,'metadata must not erase known attachment evidence');
+  assert.equal(imported.value.nextPage,'keep');
+  assert.deepEqual(imported.value.bodies,[],'metadata previews must never be cached as complete bodies');
+  assert.deepEqual(imported.value.requiredHydration,[],'import must not enqueue 15,000 body fetches');
+  const position={streamId:'primary-live',generation:'g',checkpoint:'opaque'};
+  assert.deepEqual((await wrapped.readChanges({position})).page.requiredHydration,[]);
+  assert.deepEqual((await wrapped.readChangesBatch({reads:[{position}]}))[0].page.requiredHydration,[]);
+  assert.equal((await wrapped.hydrate({keys:[key],purpose:'body'})).value.bodies[0].text,'full content');
+  await get();
+  assert.deepEqual(requests,['metadata','metadata','metadata','full','full']);
+  assert.deepEqual(costs,[20,20,20,60,60]);
+});
+
+test('metadata batch rewriting preserves all IDs, query parameters, and mutation requests',async()=>{
+  const {metadataRead}=require('./gmail-pacing.cjs');
+  const original=batchOptions(3);
+  const rewritten=metadataRead(batchUrl,original);
+  assert.equal(requestCost(rewritten.input,rewritten.options),60);
+  assert.equal((rewritten.options.body.match(/format=metadata/g)||[]).length,3);
+  assert.equal((original.body.match(/format=full/g)||[]).length,3);
+  const url='https://gmail.googleapis.com/gmail/v1/users/me/messages/id?format=full&fields=id%2Cpayload';
+  const output=metadataRead(url).input;
+  assert.equal(new URL(output).searchParams.get('fields'),'id,payload');
+  const mutation={method:'POST',body:'{}'};
+  assert.deepEqual(metadataRead(url+'/modify',mutation),{input:url+'/modify',options:mutation});
+  const external='https://example.com/gmail/v1/users/me/messages/id?format=full';
+  assert.equal(metadataRead(external).input,external);
+});
+
+test('metadata failures preserve blocked and paused states rather than advancing an import',async()=>{
+  const source={enumerate:async()=>({status:'blocked_auth'}),readChanges:async()=>({status:'paused',retryAfterMs:65000})};
+  const wrapped=decorateMailboxSource(source,{name:'google'},{runMetadata:fn=>fn()});
+  assert.deepEqual(await wrapped.enumerate({page:'{}'}),{status:'blocked_auth'});
+  assert.deepEqual(await wrapped.readChanges({position:{checkpoint:'opaque'}}),{status:'paused',retryAfterMs:65000});
 });
