@@ -21,7 +21,7 @@ spec:
         kubernetes.io/hostname: yeager
       containers:
         - name: mas
-          image: ghcr.io/element-hq/matrix-authentication-service:latest@sha256:085e37263957b3b79be85de9cfda1980b97e9653f284fba0c902445e06c200b8
+          image: ghcr.io/element-hq/matrix-authentication-service:latest@sha256:02712e68c90f3743fedbd5e3343517481b2b4f246a9fd9e2f050dc2553033847
           args:
             - server
             - --config
