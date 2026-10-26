@@ -254,7 +254,7 @@
         "ghcr.io/fccview/degoog",
         "ghcr.io/lukegus/termix",
         "ghcr.io/mealie-recipes/mealie",
-        "ghcr.io/pelican-dev/panel",
+        "ghcr.io/pelican/panel",
         "ghcr.io/flaresolverr/flaresolverr",
         "ghcr.io/twin/gatus",
         "syncthing/syncthing",

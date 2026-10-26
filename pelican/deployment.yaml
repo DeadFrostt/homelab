@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: panel
-          image: ghcr.io/pelican-dev/panel:latest@sha256:134f1229738d59b4a24e07acc445e334364a9a35b68234fe4615fa68dec3c05f
+          image: ghcr.io/pelican/panel:latest@sha256:9a4364ce709cad6240deadde3396858cab8c00a3be456e5c4e424a10c71820a0
           ports:
             - containerPort: 80
               name: http
