@@ -20,6 +20,11 @@
     "SANDBOX_DATA_VOLUME": "rakazo-trial_appdata",
     "SANDBOX_DATA_HOST_PATH": "/var/lib/docker/volumes/rakazo-trial_appdata/_data",
     "RAKAZO_COMPUTER_IMAGE": "ghcr.io/elie222/rakazo/computer@sha256:5c75973ed6d217a76b4325ee387c518477ae7035706c632b07fdf93b6e73a41a",
+    "RAKAZO_COMPUTER_CPUS": "2",
+    "RAKAZO_COMPUTER_MEMORY": "2g",
+    "RAKAZO_COMPUTER_PIDS_LIMIT": "2048",
+    "SANDBOX_COMPUTER_DNS": "1.1.1.1,1.0.0.1",
+    "SANDBOX_TEAM_SCREEN_LIMIT": "2",
     "DOCKER_SOCKET": "/var/run/docker.sock",
     "LOG_FORMAT": "json"
   }

@@ -58,7 +58,7 @@
             "envFrom": [
               {
                 "secretRef": {
-                  "name": "rakazo-env"
+                  "name": "rakazo-worker-env"
                 }
               },
               {

@@ -60,7 +60,7 @@
             "envFrom": [
               {
                 "secretRef": {
-                  "name": "rakazo-env"
+                  "name": "rakazo-postgres-env"
                 }
               },
               {
