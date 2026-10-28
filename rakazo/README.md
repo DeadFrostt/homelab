@@ -1,7 +1,38 @@
 # Rakazo, native k3s control plane on Ackermann
 
-**Prepared, not activated.** Every Deployment intentionally has `replicas: 0`.
-Do not enable Argo auto-sync/raise replicas until the gates below are satisfied.
+**Activated on Ackermann, 2026-10-27 at 22:57 America/Chicago
+(2026-10-28 03:57 UTC).** All five production Deployments now request one replica.
+The control plane runs under k3s/containerd on the same host; bot computers and
+the Cloudflare edge connector intentionally remain on Docker.
+
+## Post-cutover inspection, 2026-10-28 04:03 UTC
+
+- PostgreSQL, supervisor, API, web and worker each have one ready pod on Ackermann,
+  with zero restarts. API and supervisor health endpoints and native web return
+  HTTP 200. The public root at `https://rakazo.deadfrost.dev/` returns HTTP 200.
+- All five original `rakazo-trial-{postgres,supervisor,api,web,worker}-1` Docker
+  containers are stopped and retained, with restart policy `no`. Production pods
+  mount the original appdata, pgdata and webassets directories, not staging copies.
+- The latest observed Cloudflare configuration sends Rakazo to
+  `http://172.27.0.1:5173`; hooks remains `http://x-receiver:8787`.
+- Live resources were applied directly. At inspection there was no Rakazo Argo CD
+  Application; repository publication and reviewed merge into `main` are still
+  needed for the existing ApplicationSet to adopt these resources. Do not apply
+  the earlier zero-replica branch revision over production.
+- The worker is ready but reports one delayed queued run (about 144 seconds at
+  the latest inspected warning). Readiness does not prove successful dispatch;
+  investigate the queue and verify an authenticated end-to-end run before calling
+  the migration complete.
+- Authenticated login/data, screens/WebSockets, post-cutover computer operations,
+  integrations, Yeager SSH and Keepr still need final acceptance evidence. Earlier
+  staging checks below do not establish post-cutover acceptance.
+- Temporary `rakazo-staging` workloads and `case-migration-*` access/maintenance
+  pods remain. Remove them only after required diagnostics and rollback checks.
+
+The activation sequence stopped the original worker/API/supervisor and database
+before starting their replacements, verified API/web health, enabled the native
+worker, then stopped the original web. Retain the original containers and volumes
+for rollback; follow the shutdown ordering below.
 
 ## Architecture and conventions
 
@@ -29,10 +60,10 @@ If adopting Infisical operator management later, verify the exact project/folder
 - Adversarial review found unsafe existing-computer bind reuse; now exact writable source bind matching is required, with regression tests. Production uses original Docker-volume identity rather than a copied bind, avoiding a split writable home.
 - Staged home copy is not a final consistent snapshot while production agents are writing. Do not promote it or claim completion without final verification.
 
-## Required activation gates
+## Activation and rollback checklist
 
-1. Verify current Cloudflare remote tunnel hostname origin and a supported native-k3s origin route. Current cloudflared is token-managed with no local config. Full logs and authenticated dashboard confirmed `http://rakazo-web:5173`, while hooks stays `http://x-receiver:8787`. User signed into the Cloudflare dashboard; edit route form is accessible, no changes saved. Do not stop the source web based on an assumed route.
-2. Publish/review this branch through authorized repository access, and verify Argo renders the same zero-replica resources. Do not directly push main.
+1. Verify the current Cloudflare remote tunnel hostname origin. Cloudflared is token-managed with no local config. The post-cutover route is `http://172.27.0.1:5173`, while hooks stays `http://x-receiver:8787`. Recheck the actual configuration before any future routing change.
+2. Publish/review this branch through authorized repository access, and verify Argo renders the same active resources with one replica per Deployment. Preparation used zero replicas; that revision is no longer the desired production state. Do not directly push main.
 3. Private per-component Secret bootstrap and validate database credentials, encryption/auth/store settings. Confirm backup mechanisms cover retained original host paths if relied on.
 4. Verify computer egress against actual PodIP/ClusterIP targets. Cilium FORWARD ordering means the existing gateway/metadata probe alone does not prove cluster isolation. Do not weaken host firewall to make screens work.
 5. Verify Yeager SSH, Keepr and connected integrations from a migrated/staged computer using preserved credentials, plus authenticated web screen/WebSocket path and public-origin login.
@@ -43,10 +74,10 @@ If adopting Infisical operator management later, verify the exact project/folder
 
 ## Current temporary resources
 
-Namespace `rakazo-staging`: test PVCs, preserved private Secret, app pod, PostgreSQL pod, native supervisor and preparation pod. Test pods have bounded active deadlines. No public route or worker was activated. Completed/failed test pods may be removed by exact names after logs are saved. Do not delete PVCs/Secrets before verifying final activation/rollback requirements.
+Namespace `rakazo-staging`: test PVCs, preserved private Secret, app pod, PostgreSQL pod, native supervisor, edge web and preparation pod. These are separate from the activated production namespace `rakazo`. Completed/failed test pods may be removed by exact names after logs are saved. Do not delete PVCs/Secrets before verifying final activation/rollback requirements.
 
 ## Permanent narrow origin firewall configuration
 
 The completed configure-origin-firewall.sh host configuration script is run with sudo sh configure-origin-firewall.sh apply on Ackermann before switching the tunnel origin to http://172.27.0.1:5173. It validates the observed source IP, bridge and gateway, then persists only TCP5173 ingress from 172.27.0.3 on br-9b7ea5b085f4 to 172.27.0.1 through UFW. It does not change default policies, open the port broadly, or modify hooks. Run with remove to roll back. Revalidate if Docker networking changes. This host script is deliberately not auto-applied by Kustomize and introduces no privileged firewall controller.
 
-Manifests and this script remain in the homelab repository on Yeager; node selectors place the migrated services on Ackermann. Publishing this zero-replica preparation branch does not perform production cutover.
+Manifests and this script remain in the homelab repository on Yeager; node selectors place the migrated services on Ackermann. Production cutover has already occurred through direct application; the branch now records one replica per production service. Publishing the branch alone does not enable Argo CD adoption, which follows a reviewed merge into `main`.
