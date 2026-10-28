@@ -286,6 +286,11 @@
       matchUpdateTypes: ["major", "minor", "patch"],
       enabled: false,
     },
+    {
+      description: "Rakazo native runtime overlay is coupled to the pinned app source; require migration tests before upgrades",
+      matchFileNames: ["rakazo/**"],
+      automerge: false,
+    },
   ],
 
   vulnerabilityAlerts: {
