@@ -22,7 +22,7 @@ spec:
     spec:
       containers:
         - name: cobalt-api
-          image: ghcr.io/zimpatrick/cobalt:staging@sha256:d62dd587f2602283b42bbbbd52833e48bb75b514d8065bd518201ac6400dfeab
+          image: ghcr.io/zimpatrick/cobalt:staging@sha256:80d641dbc6fd03247927f50433616f4e0cec5745895993431c92e2129ea86866
           env:
             - name: API_URL
               value: "https://cobalt.pleasedontdmca.me/"
