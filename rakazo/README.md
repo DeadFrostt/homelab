@@ -44,3 +44,9 @@ If adopting Infisical operator management later, verify the exact project/folder
 ## Current temporary resources
 
 Namespace `rakazo-staging`: test PVCs, preserved private Secret, app pod, PostgreSQL pod, native supervisor and preparation pod. Test pods have bounded active deadlines. No public route or worker was activated. Completed/failed test pods may be removed by exact names after logs are saved. Do not delete PVCs/Secrets before verifying final activation/rollback requirements.
+
+## Permanent narrow origin firewall configuration
+
+The completed configure-origin-firewall.sh host configuration script is run with sudo sh configure-origin-firewall.sh apply on Ackermann before switching the tunnel origin to http://172.27.0.1:5173. It validates the observed source IP, bridge and gateway, then persists only TCP5173 ingress from 172.27.0.3 on br-9b7ea5b085f4 to 172.27.0.1 through UFW. It does not change default policies, open the port broadly, or modify hooks. Run with remove to roll back. Revalidate if Docker networking changes. This host script is deliberately not auto-applied by Kustomize and introduces no privileged firewall controller.
+
+Manifests and this script remain in the homelab repository on Yeager; node selectors place the migrated services on Ackermann. Publishing this zero-replica preparation branch does not perform production cutover.
