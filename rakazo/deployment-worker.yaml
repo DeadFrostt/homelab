@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rakazo-worker
+  labels:
+    app.kubernetes.io/name: rakazo
+    app.kubernetes.io/component: worker
+  annotations:
+    argocd.argoproj.io/sync-wave: '0'
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: rakazo
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: rakazo
+        app.kubernetes.io/component: worker
+    spec:
+      automountServiceAccountToken: false
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector:
+        kubernetes.io/hostname: ackermann
+      terminationGracePeriodSeconds: 120
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: worker
+          image: ghcr.io/elie222/rakazo/app@sha256:cd026fef7603396eb6d9b4b85e182a052513e492ea6db1067df43118016dea7a
+          imagePullPolicy: IfNotPresent
+          workingDir: /app/apps/worker
+          command:
+            - node
+            - --enable-source-maps
+            - dist/index.js
+          envFrom:
+            - secretRef:
+                name: rakazo-worker-env
+            - configMapRef:
+                name: rakazo-config
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              cpu: '2'
+              memory: 2048Mi
+          volumeMounts:
+            - name: appdata
+              mountPath: /data
+          startupProbe:
+            exec:
+              command:
+                - node
+                - dist/health-check.js
+            failureThreshold: 36
+            periodSeconds: 5
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command:
+                - node
+                - dist/health-check.js
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            exec:
+              command:
+                - node
+                - dist/health-check.js
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 5
+      volumes:
+        - name: appdata
+          hostPath:
+            path: /var/lib/docker/volumes/rakazo-trial_appdata/_data
+            type: Directory

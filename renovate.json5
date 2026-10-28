@@ -31,6 +31,16 @@
   customManagers: [
     {
       customType: "regex",
+      managerFilePatterns: ["/^rakazo/configmap\\.yaml$/"],
+      matchStrings: [
+        "RAKAZO_COMPUTER_IMAGE:\\s*[\\x22\\x27]?(?<depName>ghcr\\.io/elie222/rakazo/computer)@(?<currentDigest>sha256:[a-f0-9]{64})",
+      ],
+      datasourceTemplate: "docker",
+      currentValueTemplate: "latest",
+      versioningTemplate: "docker",
+    },
+    {
+      customType: "regex",
       managerFilePatterns: ["/argocd/kustomization\\.ya?ml$/"],
       matchStrings: [
         "raw\\.githubusercontent\\.com/(?<depName>argoproj/argo-cd)/(?<currentValue>v[0-9][^/]*)/manifests/install\\.yaml",
