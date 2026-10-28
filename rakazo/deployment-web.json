@@ -54,14 +54,14 @@
               "node_modules/.bin/vite",
               "preview",
               "--host",
-              "127.0.0.1",
+              "172.27.0.1",
               "--port",
               "5173"
             ],
             "envFrom": [
               {
                 "secretRef": {
-                  "name": "rakazo-env"
+                  "name": "rakazo-web-env"
                 }
               },
               {
@@ -99,7 +99,7 @@
                 "command": [
                   "node",
                   "-e",
-                  "fetch('http://127.0.0.1:5173/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+                  "fetch('http://172.27.0.1:5173/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
                 ]
               },
               "failureThreshold": 36,
@@ -111,7 +111,7 @@
                 "command": [
                   "node",
                   "-e",
-                  "fetch('http://127.0.0.1:5173/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+                  "fetch('http://172.27.0.1:5173/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
                 ]
               },
               "periodSeconds": 10,
@@ -122,7 +122,7 @@
                 "command": [
                   "node",
                   "-e",
-                  "fetch('http://127.0.0.1:5173/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+                  "fetch('http://172.27.0.1:5173/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
                 ]
               },
               "periodSeconds": 30,
