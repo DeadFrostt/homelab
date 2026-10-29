@@ -36,7 +36,7 @@ spec:
           - 107
       containers:
         - name: supervisor
-          image: ghcr.io/elie222/rakazo/app@sha256:cd026fef7603396eb6d9b4b85e182a052513e492ea6db1067df43118016dea7a
+          image: ghcr.io/elie222/rakazo/app@sha256:a7fd1081fcc3dcfbe37adfc6af505bd5b73980abbca58ed2e25d588b3dd8333f
           imagePullPolicy: IfNotPresent
           workingDir: /app
           command:
