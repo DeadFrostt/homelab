@@ -18,7 +18,7 @@ spec:
     spec:
       initContainers:
         - name: render-config
-          image: matrixdotorg/synapse:latest@sha256:97665cd4539dcf107c69fb6afdb720e1d1c9c09fb2b5701fb13d6c33b22cd8f0
+          image: matrixdotorg/synapse:latest@sha256:3c2900775df229b91ae0f21f2c98070e0da48d4e135a9c5b567b029be57fdb56
           command:
             - python
             - -c
@@ -57,7 +57,7 @@ spec:
               mountPath: /data
       containers:
         - name: synapse
-          image: matrixdotorg/synapse:latest@sha256:97665cd4539dcf107c69fb6afdb720e1d1c9c09fb2b5701fb13d6c33b22cd8f0
+          image: matrixdotorg/synapse:latest@sha256:3c2900775df229b91ae0f21f2c98070e0da48d4e135a9c5b567b029be57fdb56
           ports:
             - containerPort: 8008
               name: client
