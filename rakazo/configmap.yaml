@@ -17,7 +17,7 @@ data:
   SANDBOX_COMPUTER_EGRESS: restricted
   SANDBOX_DATA_VOLUME: rakazo-trial_appdata
   SANDBOX_DATA_HOST_PATH: /var/lib/docker/volumes/rakazo-trial_appdata/_data
-  RAKAZO_COMPUTER_IMAGE: ghcr.io/elie222/rakazo/computer@sha256:5c75973ed6d217a76b4325ee387c518477ae7035706c632b07fdf93b6e73a41a
+  RAKAZO_COMPUTER_IMAGE: ghcr.io/elie222/rakazo/computer@sha256:3b821e1a0074bd05b62d5b3d1422480074d98aad4102b7e1072f4fe38721c3bb
   RAKAZO_COMPUTER_CPUS: '2'
   RAKAZO_COMPUTER_MEMORY: 2g
   RAKAZO_COMPUTER_PIDS_LIMIT: '2048'
