@@ -5,6 +5,7 @@ resources:
   - namespace.yaml
   - configmap.yaml
   - deployment-postgres.yaml
+  - migration-job.yaml
   - deployment-supervisor.yaml
   - deployment-api.yaml
   - deployment-worker.yaml

@@ -36,3 +36,8 @@ jobs:
       # the velero / cnpg-system / infisical-operator charts.
       - name: Build (kustomize) and validate (kubeconform)
         run: ./.github/validate-manifests.sh
+
+      - name: Guard Rakazo migration ordering and image parity
+        run: |
+          python3 -m pip install PyYAML==6.0.3
+          python3 tests/test_rakazo_rollout.py
