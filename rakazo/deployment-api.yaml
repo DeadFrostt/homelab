@@ -34,7 +34,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: api
-          image: ghcr.io/elie222/rakazo/app@sha256:cd026fef7603396eb6d9b4b85e182a052513e492ea6db1067df43118016dea7a
+          image: ghcr.io/elie222/rakazo/app@sha256:8071dd2e41a9d72ae92d2588467721454e0f91e3c3ab9ca1f93b93823fd958b3
           imagePullPolicy: IfNotPresent
           workingDir: /app/apps/api
           command:
