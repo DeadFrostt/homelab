@@ -29,3 +29,5 @@ jobs:
         run: bash host-backup/test-backup-verify.sh
       - name: Bounded verification retries
         run: bash host-backup/tests/test_backup_verify.sh
+      - name: Native shell verification rejects content corruption
+        run: bash host-backup/test-native-shell.sh

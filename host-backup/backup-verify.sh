@@ -6,6 +6,32 @@ backup_rclone() { env -u JOURNAL_STREAM rclone "$@"; }
 verify_remote_snapshot() {
   local snapshot=$1 remote=$2
   shift 2
+  # Native object hashes verify uploads without consuming download allowance.
+  # Explicit download mode remains available for controlled restore drills.
+  if [[ "${BACKUP_VERIFY_MODE:-native}" == native ]]; then
+    env -u JOURNAL_STREAM python3 - "$snapshot" "$remote" "$@" <<'PYTHON'
+import hashlib,json,os,subprocess,sys
+from pathlib import Path
+snapshot=Path(sys.argv[1]);remote=sys.argv[2]
+subprocess.run(['sha256sum','--check','--status','SHA256SUMS'],cwd=snapshot,check=True)
+expected={}
+for path in snapshot.rglob('*'):
+    if path.is_symlink():raise ValueError('Snapshot links refused')
+    if path.is_file():
+        with path.open('rb') as stream:digest=hashlib.file_digest(stream,'sha1').hexdigest()
+        expected[str(path.relative_to(snapshot))]=(path.stat().st_size,digest)
+result=subprocess.run(['rclone',*sys.argv[3:],'lsjson',remote,'--recursive','--hash','--retries','1'],capture_output=True,check=True,timeout=120)
+actual={}
+for item in json.loads(result.stdout):
+    if item['IsDir']:continue
+    name=item['Path'];hashes={k.lower().replace('-',''):v.lower() for k,v in item.get('Hashes',{}).items()};digest=hashes.get('sha1','')
+    if name in actual or len(digest)!=40 or any(c not in '0123456789abcdef' for c in digest):raise ValueError('Missing/invalid native hash; verification refused')
+    actual[name]=(item['Size'],digest)
+if not expected or actual!=expected:raise ValueError('Object inventory/hash mismatch; pruning refused')
+print('Native upload hashes verified without payload downloads')
+PYTHON
+    return $?
+  fi
   local attempt checksums attempts=${BACKUP_VERIFY_ATTEMPTS:-3}
   [[ -s "$snapshot/SHA256SUMS" ]] || { echo "Missing snapshot SHA256SUMS" >&2; return 1; }
   # This also refuses incomplete/corrupt local inputs before contacting storage.

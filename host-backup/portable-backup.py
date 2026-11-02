@@ -184,7 +184,7 @@ def create_snapshot(root, recipient, remote=None, local_only=False):
                     with archive.open('rb') as f: run(['age','-r',recipient,'-o',str(appdir/(claim+'.tar.gz.age'))],stdin=f,capture_output=True)
                     info['files'].append({'claim':claim,'sqlite_snapshots':count})
             if any(before[claim]!=tree_signature(path) for claim,path in source_files.items()):
-                raise RuntimeError('Application files changed across the database recovery point; set refused')
+                raise RuntimeError('Application files changed across the database recovery point; set refused: '+app)
             info['completed_utc']=now(); manifest['applications'][app]=info
         manifest['completed_utc']=now()
         (work/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')

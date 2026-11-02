@@ -5,6 +5,12 @@ from unittest.mock import patch
 spec=importlib.util.spec_from_file_location('recovery',pathlib.Path(__file__).parent/'recovery/recovery.py');r=importlib.util.module_from_spec(spec);spec.loader.exec_module(r)
 
 class MirrorRetention(unittest.TestCase):
+ def test_source_inventory_supported(self):
+  import ast
+  tree=ast.parse((pathlib.Path(__file__).parent/'portable-backup.py').read_text())
+  apps=next(ast.literal_eval(n.value) for n in tree.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='APPS' for t in n.targets))
+  self.assertTrue(set(apps)<=r.APPS, 'Source exporter and home verifier inventory drift')
+
  def test_skip_older_subsets_and_prune_first(self):
   with tempfile.TemporaryDirectory() as temp:
    root=pathlib.Path(temp);cache=root/'cache';cache.mkdir();config=root/'config';config.mkdir()
@@ -18,7 +24,7 @@ class MirrorRetention(unittest.TestCase):
     if 'lsjson' in args:return subprocess.CompletedProcess(args,0,stdout=json.dumps([{'Name':s} for s in stamps]).encode())
     if 'cat' in args:
      stamp=args[-1].split('/')[-2];hints.append(stamp)
-     apps=['gatus'] if stamp==stamps[1] else ['gatus','vaultwarden']
+     apps=['gatus'] if stamp!=stamps[2] else ['gatus','vaultwarden']
      return subprocess.CompletedProcess(args,0,stdout=json.dumps({'applications':dict.fromkeys(apps,{})}).encode())
     if 'copy' in args:
      self.assertFalse(old.exists(),'History must be pruned before first download')
@@ -29,7 +35,7 @@ class MirrorRetention(unittest.TestCase):
     return {'applications':{'gatus':{}} if path.name==stamps[0] else {'gatus':{},'vaultwarden':{}}}
    with patch.object(r,'CONFIG',config),patch.object(r,'CACHE',cache),patch.object(r,'guard',return_value={'remote':'b2:bucket/prefix','priority':['gatus'],'protected':['gatus','vaultwarden']}),patch.object(r,'retention_plan',side_effect=plan),patch.object(r,'verify',side_effect=verify),patch.object(r,'run',side_effect=run):r.mirror()
    self.assertEqual(copies,[stamps[0],stamps[2]])
-   self.assertEqual(hints,[stamps[1],stamps[2]])
+   self.assertEqual(hints,stamps)
    self.assertEqual(len(plans),2)
    self.assertTrue((cache/stamps[0]/'.verified.json').exists())
 

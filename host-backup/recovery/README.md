@@ -253,3 +253,16 @@ gates have passed:
 A public promotion/failback drill and final RTO are pending those gates. No
 automatic promotion, primary outage, public routing switch or claimed one-hour
 RPO guarantee follows from the isolated tests alone.
+
+## November bandwidth and inventory repair
+
+Nightly Docker/K3s verification now defaults to native SHA-1/size checks for all
+objects plus local SHA-256, matching portable export verification. Missing hashes
+fail closed. Full readback remains explicit via BACKUP_VERIFY_MODE=download for
+controlled drills; it is not needed after every upload.
+
+Inbox Zero is included in the home verifier allowlist. A regression test checks
+that every source-export application is supported by the verifier. The mirror
+checks application metadata before payload downloads, including its first
+candidate, so unsupported inventories cannot repeatedly consume the allowance.
+Metadata is only a hint; signed SHA-256 and complete decryption remain mandatory.

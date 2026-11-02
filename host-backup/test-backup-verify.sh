@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+export BACKUP_VERIFY_MODE=download
 source "$(dirname "$0")/backup-verify.sh"
 work=$(mktemp -d)
 trap 'rm -rf -- "$work"' EXIT

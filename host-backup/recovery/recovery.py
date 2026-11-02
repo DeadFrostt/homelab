@@ -8,7 +8,7 @@ CONFIG = Path('/etc/homelab-dr')
 CACHE = Path('/var/lib/homelab-dr/cache')
 STAMP = re.compile(r'20[0-9]{6}T[0-9]{6}Z')
 CACHE_BUDGET = 4*1024**3
-APPS = {'gatus','vaultwarden','actual-budget','couch-db','infisical','authentik','zipline','matrix','mas'}
+APPS = {'gatus','vaultwarden','actual-budget','couch-db','infisical','authentik','zipline','matrix','mas','inbox-zero'}
 
 def run(args, **kw):
     env = dict(os.environ); env.pop('JOURNAL_STREAM', None)
@@ -70,7 +70,7 @@ def mirror():
     for stamp in candidates:
         final=CACHE/stamp; temp=None
         try:
-            if priority:
+            if priority or not final.exists():
                 # Metadata is only a selection hint, never a trust decision.
                 # Downloaded sets must still pass signature/hash/decryption.
                 if final.exists():
@@ -79,7 +79,7 @@ def mirror():
                     hint=json.loads(run(base+['cat',config['remote']+'/'+stamp+'/manifest.json'],capture_output=True,timeout=30).stdout)
                 hinted_apps=set(hint['applications'])
                 if not hinted_apps or not hinted_apps<=APPS: raise ValueError('Invalid application hint')
-                if hinted_apps<=covered: continue
+                if priority and hinted_apps<=covered: continue
             if not final.exists():
                 if shutil.disk_usage(CACHE).free < 8*1024**3: raise ValueError('Home disk reserve below 8 GiB')
                 temp=CACHE/('.'+stamp+'.incomplete')

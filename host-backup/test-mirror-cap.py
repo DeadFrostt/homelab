@@ -10,6 +10,7 @@ class CapHandling(unittest.TestCase):
    calls=[]
    def run(args,**kw):
     if 'lsjson' in args:return subprocess.CompletedProcess(args,0,stdout=json.dumps([{'Name':'20261006T100000Z'},{'Name':'20261006T090000Z'}]).encode())
+    if 'cat' in args:return subprocess.CompletedProcess(args,0,stdout=b'{"applications":{"gatus":{}}}')
     if 'copy' in args:
      calls.append(args);self.assertEqual(args[args.index('--retries')+1],'1');self.assertTrue(kw['capture_output'])
      raise subprocess.CalledProcessError(1,args,stderr=b'403 download_cap_exceeded')
