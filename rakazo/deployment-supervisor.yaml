@@ -6,7 +6,7 @@ metadata:
     app.kubernetes.io/name: rakazo
     app.kubernetes.io/component: supervisor
   annotations:
-    argocd.argoproj.io/sync-wave: '0'
+    argocd.argoproj.io/sync-wave: '1'
 spec:
   replicas: 1
   strategy:

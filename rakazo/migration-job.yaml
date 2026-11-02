@@ -1,0 +1,49 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: rakazo-migrate
+  namespace: rakazo
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/sync-wave: '0'
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 900
+  template:
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector:
+        kubernetes.io/hostname: ackermann
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: migrate
+        image: ghcr.io/elie222/rakazo/app@sha256:8071dd2e41a9d72ae92d2588467721454e0f91e3c3ab9ca1f93b93823fd958b3
+        workingDir: /app
+        command:
+        - pnpm
+        - db:migrate
+        envFrom:
+        - secretRef:
+            name: rakazo-api-env
+        - configMapRef:
+            name: rakazo-config
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: '1'
+            memory: 1Gi

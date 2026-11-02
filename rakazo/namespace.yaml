@@ -1,6 +1,8 @@
 apiVersion: v1
 kind: Namespace
 metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
   name: rakazo
   labels:
     app.kubernetes.io/name: rakazo
