@@ -36,7 +36,7 @@ spec:
           - 107
       initContainers:
         - name: prepare-computer-image
-          image: ghcr.io/elie222/rakazo/app@sha256:8071dd2e41a9d72ae92d2588467721454e0f91e3c3ab9ca1f93b93823fd958b3
+          image: ghcr.io/elie222/rakazo/app@sha256:33eeb6ec6caa02b164b8cb21d7a2711c5582e75fac725bcd6eadd984439b26c5
           imagePullPolicy: IfNotPresent
           workingDir: /app/infra/sandboxes/supervisor
           command:
@@ -89,7 +89,7 @@ spec:
               mountPath: /var/run/docker.sock
       containers:
         - name: supervisor
-          image: ghcr.io/elie222/rakazo/app@sha256:8071dd2e41a9d72ae92d2588467721454e0f91e3c3ab9ca1f93b93823fd958b3
+          image: ghcr.io/elie222/rakazo/app@sha256:33eeb6ec6caa02b164b8cb21d7a2711c5582e75fac725bcd6eadd984439b26c5
           imagePullPolicy: IfNotPresent
           workingDir: /app
           command:
