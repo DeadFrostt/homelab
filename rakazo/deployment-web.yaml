@@ -34,7 +34,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: web
-          image: ghcr.io/elie222/rakazo/app@sha256:33eeb6ec6caa02b164b8cb21d7a2711c5582e75fac725bcd6eadd984439b26c5
+          image: ghcr.io/elie222/rakazo/app@sha256:908045c3b393f4d948ea6bed9cd86ab77fd32d467d2fdfa042805b34c5b851ea
           imagePullPolicy: IfNotPresent
           workingDir: /app/apps/web
           command:
