@@ -496,7 +496,7 @@ app.post("/computers/:id/browser", async (c) => {
   // Read eagerly so the Node HTTP adapter observes disconnects during screen setup too.
   const signal = c.req.raw.signal;
   signal.throwIfAborted();
-  const body = z
+  const parsed = z
     .discriminatedUnion("command", [
       z.object({
         command: z.literal("navigate"),
@@ -512,11 +512,32 @@ app.post("/computers/:id/browser", async (c) => {
       }),
       z.object({ command: z.literal("snapshot") }),
       z.object({
+        command: z.literal("purchase_check"),
+        actions: z
+          .array(z.object({ kind: z.string().max(40), ref: z.string().max(200).optional() }))
+          .max(24)
+          .optional(),
+        desktop: z.boolean().optional(),
+        enter: z.boolean().optional(),
+        unplaced: z.boolean().optional(),
+        points: z
+          .array(z.object({ x: z.number().finite(), y: z.number().finite() }))
+          .max(24)
+          .optional(),
+      }),
+      z.object({
         command: z.literal("act"),
         actions: z
           .array(
             z.discriminatedUnion("kind", [
-              z.object({ kind: z.literal("click"), ref: z.string().min(1).max(200) }),
+              z.object({
+                kind: z.literal("click"),
+                ref: z.string().min(1).max(200),
+                approved: z.boolean().optional(),
+                site: z.string().max(253).optional(),
+                label: z.string().max(200).optional(),
+                amount: z.string().max(100).optional(),
+              }),
               z.object({
                 kind: z.literal("upload"),
                 ref: z.string().min(1).max(200),
@@ -539,7 +560,14 @@ app.post("/computers/:id/browser", async (c) => {
           .max(24),
       }),
     ])
-    .parse(await c.req.json());
+    .safeParse(await c.req.json());
+  if (!parsed.success) {
+    return c.json(
+      { ok: false, code: "invalid_browser_request", error: "Invalid page browser request" },
+      400,
+    );
+  }
+  const body = parsed.data;
   const carriesSavedLogin =
     body.command === "act" && body.actions.some((step) => "origin" in step && step.origin);
   try {
@@ -577,6 +605,16 @@ app.post("/computers/:id/browser", async (c) => {
         stdin: `${JSON.stringify(body)}\n`,
       },
     );
+    // Older computer images can refuse a command before touching the page. Preserve only
+    // a structured refusal; actual crashes and malformed output remain failures.
+    if (result.code === 2 && Buffer.byteLength(result.stdout) <= 512 * 1024) {
+      try {
+        const refused = JSON.parse(result.stdout);
+        if (refused?.ok === false && typeof refused.error === "string") return c.json(refused);
+      } catch {
+        // Malformed helper output must retain the fail-closed behavior below.
+      }
+    }
     // A nonzero exit or malformed output cannot establish which mutations ran.
     if (result.code !== 0 || Buffer.byteLength(result.stdout) > 512 * 1024) {
       throw new Error(
