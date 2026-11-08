@@ -29,7 +29,7 @@ spec:
           effect: NoSchedule
       containers:
         - name: cobalt-api
-          image: ghcr.io/zimpatrick/cobalt:staging@sha256:80d641dbc6fd03247927f50433616f4e0cec5745895993431c92e2129ea86866
+          image: ghcr.io/zimpatrick/cobalt:staging@sha256:ffe2e1886b2c8c01f16f48f4cabed5205fe93082f0480b34fd3d2c88bdc64a5a
           env:
             - name: API_URL
               value: "https://cobalt.pleasedontdmca.me/"
