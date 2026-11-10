@@ -4,7 +4,7 @@ On Ackermann, before syncing the supervisor:
     sudo bash restrict-computer-egress.sh
 
 The installed firewall service persists its rules across reboot. Only rakazo-c*
-bridges may open 172.17.0.1:1056; all other sources are dropped. Other host ports
+bridges may open 172.17.0.1:1056; host loopback health probes are also allowed, and all other sources are dropped. Other host ports
 and the original forwarded destination restrictions remain blocked.
 
 The supervisor mounts these operator-owned client defaults into new computer
@@ -22,4 +22,4 @@ Clients without proxy support do not gain direct routes. For example:
     curl http://yeager:3015/
     curl --proxy socks5h://172.17.0.1:1056 http://100.105.150.16:3015/
 
-The first command uses /etc/curlrc. Public browsing also works through the gateway.
+The first command uses /home/rakazo/.curlrc. Public browsing also works through the gateway.

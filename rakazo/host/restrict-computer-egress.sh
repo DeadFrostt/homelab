@@ -94,6 +94,8 @@ egress_rules_v4() {
   # The userspace Tailscale proxy is the only host service computers may open.
   # Drop other sources explicitly, including LAN and unrelated Docker bridges.
   printf 'INPUT -i %s+ -d 172.17.0.1/32 -p tcp --dport 1056 -j ACCEPT\n' "$BRIDGE_PREFIX"
+  # Kubelet's local health probe reaches the Docker address over loopback.
+  printf 'INPUT -i lo -d 172.17.0.1/32 -p tcp --dport 1056 -j ACCEPT\n'
   printf 'INPUT -d 172.17.0.1/32 -p tcp --dport 1056 -j DROP\n'
   printf 'INPUT -i %s+ -j DROP\n' "$BRIDGE_PREFIX"
   printf 'DOCKER-USER -i %s+ -o %s+ -j RETURN\n' "$BRIDGE_PREFIX" "$BRIDGE_PREFIX"

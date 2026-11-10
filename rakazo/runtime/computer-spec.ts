@@ -626,7 +626,7 @@ function computerProxyMounts(): Docker.MountSettings[] {
   if (!process.env.SANDBOX_COMPUTER_PROXY) return [];
   return [
     ["profile.sh", "/etc/profile.d/rakazo-tailnet.sh"],
-    ["curlrc", "/etc/curlrc"],
+    ["curlrc", "/home/rakazo/.curlrc"],
     ["chromium.json", "/etc/chromium/policies/managed/rakazo-tailnet.json"],
   ].map(([file, target]) => ({
     Type: "bind" as const,
