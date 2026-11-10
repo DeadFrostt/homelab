@@ -21,7 +21,10 @@ spec:
         app.kubernetes.io/name: rakazo
         app.kubernetes.io/component: supervisor
     spec:
-      automountServiceAccountToken: false
+      # The tailscale sidecar needs an API token to persist its node key in a
+      # Secret; the supervisor itself does not, and keeps it unmounted.
+      serviceAccountName: tailscale
+      automountServiceAccountToken: true
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
       nodeSelector:
@@ -161,6 +164,61 @@ spec:
             periodSeconds: 30
             timeoutSeconds: 5
             failureThreshold: 5
+        # Userspace Tailscale. The supervisor shares this pod's network
+        # namespace, so 127.0.0.1:1055 is a SOCKS5 proxy into the tailnet and
+        # nothing on the LAN or in the Cilium overlay gains a route. Running in
+        # userspace mode is deliberate: no tailscale0 interface is created on
+        # Ackermann, so the node's own Tailscale transport stays off the Cilium
+        # overlay it carries (see host-backup/tailscale-overlay-guard.sh).
+        - name: tailscale
+          image: ghcr.io/tailscale/tailscale:v1.104.4@sha256:ed6480b33c6eb67c9cbd203ed42b9fb57e361986725b6856def71b7a3d9e276c
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: TS_AUTHKEY
+              valueFrom:
+                secretKeyRef:
+                  name: rakazo-tailscale-auth
+                  key: TS_AUTHKEY
+                  optional: true
+          envFrom:
+            - configMapRef:
+                name: rakazo-tailscale-config
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsUser: 0
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          volumeMounts:
+            - name: tailscale-state
+              mountPath: /var/lib/tailscale
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: 9002
+              host: 127.0.0.1
+            failureThreshold: 30
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 9002
+              host: 127.0.0.1
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 9002
+              host: 127.0.0.1
+            periodSeconds: 30
+            failureThreshold: 5
       volumes:
         - name: appdata
           hostPath:
@@ -173,3 +231,6 @@ spec:
         - name: runtime
           configMap:
             name: rakazo-native-runtime
+        - name: tailscale-state
+          persistentVolumeClaim:
+            claimName: rakazo-tailscale-state

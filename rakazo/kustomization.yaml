@@ -4,6 +4,10 @@ namespace: rakazo
 resources:
   - namespace.yaml
   - configmap.yaml
+  - configmap-tailscale.yaml
+  - rbac-tailscale.yaml
+  - pvc-tailscale.yaml
+  - networkpolicy-tailscale.yaml
   - deployment-postgres.yaml
   - migration-job.yaml
   - deployment-supervisor.yaml

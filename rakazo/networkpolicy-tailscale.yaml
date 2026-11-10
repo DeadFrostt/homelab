@@ -1,0 +1,57 @@
+# The supervisor shares a pod network namespace with the Tailscale sidecar, so
+# these policies gate the supervisor's own egress. Without them the sidecar's
+# SOCKS proxy would be reachable by every pod in the cluster.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rakazo-supervisor-egress
+  namespace: rakazo
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: rakazo
+      app.kubernetes.io/component: supervisor
+  policyTypes:
+    - Egress
+  egress:
+    # Kubernetes API, for the supervisor's own service discovery.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # DNS and the public internet. The computer containers get their own
+    # restricted-egress treatment from the host ruleset; the supervisor itself
+    # only needs to pull images and reach the Tailscale control plane.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.42.0.0/16
+              - 169.254.169.254/32
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+        - protocol: UDP
+          port: 41641
+        - protocol: TCP
+          port: 41641
+    # The Tailscale sidecar's SOCKS proxy and its health endpoint, both on
+    # loopback inside this pod.
+    - to:
+        - ipBlock:
+            cidr: 127.0.0.1/32
+      ports:
+        - protocol: TCP
+          port: 1055
+        - protocol: TCP
+          port: 9002
