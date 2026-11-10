@@ -21,3 +21,6 @@ configMapGenerator:
       - runtime/computer-spec.ts
       - runtime/native-runtime.ts
       - runtime/egress-probe.ts
+  - name: rakazo-tailnet-gateway
+    files:
+      - proxy.cjs=proxy/proxy.cjs

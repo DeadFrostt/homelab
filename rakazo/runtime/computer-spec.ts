@@ -395,6 +395,15 @@ export function containerCreateOptions(input: ComputerCreateInput) {
       "PATH=/home/rakazo/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
       "NPM_CONFIG_PREFIX=/home/rakazo/.local",
       "PIP_USER=1",
+      // Only the host proxy port is reachable through restricted egress.
+      ...(process.env.SANDBOX_COMPUTER_PROXY
+        ? [
+            `ALL_PROXY=${process.env.SANDBOX_COMPUTER_PROXY}`,
+            `all_proxy=${process.env.SANDBOX_COMPUTER_PROXY}`,
+            "NO_PROXY=localhost,127.0.0.1,::1",
+            "no_proxy=localhost,127.0.0.1,::1",
+          ]
+        : []),
       ...(input.controlToken ? [`RAKAZO_COMPUTER_CONTROL_TOKEN=${input.controlToken}`] : []),
     ],
     Labels: {
@@ -418,9 +427,10 @@ export function containerCreateOptions(input: ComputerCreateInput) {
                   Subpath: input.homeVolume.subpath,
                 } as Docker.MountSettings["VolumeOptions"],
               },
+              ...computerProxyMounts(),
             ],
           }
-        : { Binds: [`${input.homePath}:/home/rakazo`], Mounts: undefined }),
+        : { Binds: [`${input.homePath}:/home/rakazo`], Mounts: computerProxyMounts() }),
       PortBindings: ports.PortBindings,
       ShmSize: 256 * 1024 * 1024,
       CapDrop: ["ALL"],
@@ -608,4 +618,20 @@ function mapKey(key: string) {
   if (lower === "shift") return "shift";
   if (lower === "meta" || lower === "cmd" || lower === "super") return "super";
   return key;
+}
+
+// Operator-owned defaults also cover curl and Chromium, which do not all consume
+// ALL_PROXY in the same way. Files are installed on the Docker host before rollout.
+function computerProxyMounts(): Docker.MountSettings[] {
+  if (!process.env.SANDBOX_COMPUTER_PROXY) return [];
+  return [
+    ["profile.sh", "/etc/profile.d/rakazo-tailnet.sh"],
+    ["curlrc", "/etc/curlrc"],
+    ["chromium.json", "/etc/chromium/policies/managed/rakazo-tailnet.json"],
+  ].map(([file, target]) => ({
+    Type: "bind" as const,
+    Source: `/etc/rakazo/tailnet-client/${file}`,
+    Target: target,
+    ReadOnly: true,
+  }));
 }

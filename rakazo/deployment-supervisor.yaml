@@ -165,8 +165,8 @@ spec:
             timeoutSeconds: 5
             failureThreshold: 5
         # Userspace Tailscale. The supervisor shares this pod's network
-        # namespace, so 127.0.0.1:1055 is a SOCKS5 proxy into the tailnet and
-        # nothing on the LAN or in the Cilium overlay gains a route. Running in
+        # namespace, so 127.0.0.1:1055 is a SOCKS5 proxy into the tailnet.
+        # The filtered gateway exposes it to Rakazo computer bridges. Running in
         # userspace mode is deliberate: no tailscale0 interface is created on
         # Ackermann, so the node's own Tailscale transport stays off the Cilium
         # overlay it carries (see host-backup/tailscale-overlay-guard.sh).
@@ -219,7 +219,33 @@ spec:
               host: 127.0.0.1
             periodSeconds: 30
             failureThreshold: 5
+        - name: tailnet-gateway
+          image: ghcr.io/elie222/rakazo/app@sha256:908045c3b393f4d948ea6bed9cd86ab77fd32d467d2fdfa042805b34c5b851ea
+          command: ["node", "/gateway/proxy.cjs"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          volumeMounts:
+            - name: tailnet-gateway
+              mountPath: /gateway
+              readOnly: true
+          readinessProbe:
+            tcpSocket:
+              host: 172.17.0.1
+              port: 1056
+            periodSeconds: 5
       volumes:
+        - name: tailnet-gateway
+          configMap:
+            name: rakazo-tailnet-gateway
         - name: appdata
           hostPath:
             path: /var/lib/docker/volumes/rakazo-trial_appdata/_data

@@ -11,8 +11,7 @@ data:
   # second interface advertising the node's addresses reintroduces the
   # recursion that host-backup/tailscale-overlay-guard.sh exists to prevent.
   TS_USERSPACE: "true"
-  # Listen on loopback so the supervisor reaches the proxy over 127.0.0.1 and
-  # nothing on the LAN can use this node as a SOCKS proxy.
+  # The filtered gateway bridges Docker clients to this loopback listener.
   TS_SOCKS5_SERVER: "127.0.0.1:1055"
   TS_STATE_DIR: "/var/lib/tailscale"
   TS_AUTH_ONCE: "true"

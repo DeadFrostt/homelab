@@ -1,0 +1,7 @@
+{
+  "ProxySettings": {
+    "ProxyMode": "fixed_servers",
+    "ProxyServer": "socks5://172.17.0.1:1056",
+    "ProxyBypassList": "localhost;127.0.0.1;[::1]"
+  }
+}
