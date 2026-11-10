@@ -4,9 +4,9 @@ metadata:
   name: rakazo-tailscale-state
   namespace: rakazo
   annotations:
-    # Created before the supervisor starts so tailscaled never begins with a
-    # fresh node identity and re-registers under a new name.
-    argocd.argoproj.io/sync-wave: "-2"
+    # local-path waits for a consumer: share the supervisor wave so Argo can
+    # create that consumer before waiting for this claim to become Bound.
+    argocd.argoproj.io/sync-wave: "1"
 spec:
   accessModes: [ReadWriteOnce]
   storageClassName: local-path
