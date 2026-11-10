@@ -1,0 +1,150 @@
+// Tailscale policy — deadfrostt tailnet
+// Validated against the machine list from 2026-11-09 23:03 CST.
+// Tags are assigned in the admin console; saving this file does not tag anything.
+{
+	"hosts": {
+		// Only devices still addressed by name. Everything else is by tag.
+		"harshilslaptop": "100.124.22.82",
+		"harshils-macbook-pro": "100.92.179.45",
+		"braun": "100.82.104.24",
+	},
+
+	"groups": {
+		"group:admin": ["harshilsharma479@gmail.com"],
+	},
+
+	"tagOwners": {
+		"tag:server":        ["group:admin"], // yeager, ackermann, springer
+		"tag:k8s":           ["group:admin"], // pod sidecars that join the tailnet
+		"tag:rakazo-bot":    ["group:admin"], // rakazo supervisor sidecar only
+		"tag:exit-node":     ["group:admin"], // springer (see note below)
+		"tag:remote-client": ["group:admin"], // reserved for shared / low-trust devices
+	},
+
+	"grants": [
+		// You, everywhere.
+		{
+			"src": ["group:admin"],
+			"dst": ["*"],
+			"ip":  ["*"],
+		},
+
+		// Any member reaches their own devices and nothing else.
+		{
+			"src": ["autogroup:member"],
+			"dst": ["autogroup:self"],
+			"ip":  ["*"],
+		},
+
+		// Servers <-> servers. Explicit ports instead of "*": k3s API and kubelet,
+		// etcd, Cilium VXLAN over Tailscale, Komodo, node-exporter, and the
+		// services that actually live on these three hosts.
+		{
+			"src": ["tag:server"],
+			"dst": ["tag:server"],
+			"ip":  [
+				"tcp:22", "tcp:80", "tcp:443",
+				"tcp:2379", "tcp:2380",
+				"tcp:3015",
+				"tcp:6443",
+				"tcp:8120",
+				"tcp:8472", "udp:8472",
+				"tcp:8787",
+				"tcp:9100", "tcp:9120",
+				"tcp:10250",
+				"tcp:2022",
+				"tcp:25565", "tcp:25566",
+			],
+		},
+
+		// The only server -> personal device path: Authentik RAC to the laptop.
+		// The RAC outpost runs as a pod on ackermann; it is not on yeager.
+		{
+			"src": ["tag:server"],
+			"dst": ["harshilslaptop"],
+			"ip":  ["tcp:3389", "udp:3389"],
+		},
+
+		// The rakazo supervisor sidecar: SSH to servers only. No Kubernetes API,
+		// no kubelet, no keeper, no LAN, no personal devices. This is the bot's
+		// whole tailnet surface.
+		{
+			"src": ["tag:rakazo-bot"],
+			"dst": ["tag:server"],
+			"ip":  ["tcp:22"],
+		},
+
+		// Pod sidecars may use an exit node to reach the internet.
+		{
+			"src": ["tag:k8s"],
+			"dst": ["autogroup:internet"],
+			"ip":  ["*"],
+		},
+
+		// Reserved: shared / low-trust devices -> servers, common ports only.
+		{
+			"src": ["tag:remote-client"],
+			"dst": ["tag:server"],
+			"ip":  ["tcp:22", "tcp:80", "tcp:443"],
+		},
+	],
+
+	// Keep Tailscale transport off the Cilium pod overlay on every node that
+	// carries it. This is the policy-level twin of
+	// host-backup/tailscale-overlay-guard.sh, which enforces it in iptables.
+	// Both are wanted: the script survives a policy edit, the policy survives a
+	// host rebuild.
+	"ssh": [
+		{
+			"action":      "check",
+			"checkPeriod": "12h",
+			"src":         ["autogroup:member"],
+			"dst":         ["autogroup:self"],
+			"users":       ["autogroup:nonroot"],
+		},
+		{
+			"action":      "check",
+			"checkPeriod": "12h",
+			"src":         ["group:admin"],
+			"dst":         ["tag:server"],
+			"users":       ["autogroup:nonroot"],
+		},
+		// The bot has no browser and no 2FA device, so "check" would strand it.
+		// Nonroot only; sudo still prompts.
+		{
+			"action": "accept",
+			"src":    ["tag:rakazo-bot"],
+			"dst":    ["tag:server"],
+			"users":  ["autogroup:nonroot"],
+		},
+	],
+
+	// Funnel is not used; public exposure is Cloudflare Tunnel. To re-enable on
+	// one device, add a nodeAttrs entry targeting just that device.
+
+	"tests": [
+		{
+			"src":    "harshilsharma479@gmail.com",
+			"accept": ["tag:server:22", "tag:server:6443", "harshilslaptop:3389", "braun:22"],
+		},
+		{
+			"src":    "tag:server",
+			"accept": ["tag:server:6443", "tag:server:10250", "tag:server:8120", "harshilslaptop:3389"],
+			"deny":   ["harshilslaptop:22", "braun:22"],
+		},
+		{
+			"src":   "tag:server",
+			"proto": "udp",
+			"accept": ["tag:server:8472"],
+		},
+		{
+			"src":    "tag:rakazo-bot",
+			"accept": ["tag:server:22"],
+			"deny":   ["tag:server:6443", "tag:server:10250", "tag:server:3015", "tag:server:8472", "harshilslaptop:3389", "braun:22"],
+		},
+		{
+			"src":  "tag:k8s",
+			"deny": ["tag:server:22", "braun:22", "harshilslaptop:3389"],
+		},
+	],
+}
