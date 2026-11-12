@@ -35,7 +35,7 @@ spec:
           effect: NoSchedule
       containers:
         - name: trawl
-          image: ghcr.io/germondai/trawl:latest@sha256:1beeb19cef0952cad1f071dbc188c83eb3086ee176cd309be6383dba44b06ece
+          image: ghcr.io/germondai/trawl:latest@sha256:ef732d2c62724fe4ed110316559340d3adc1edfaae697e173c18a1251613a781
           ports:
             - containerPort: 8191
               name: http
