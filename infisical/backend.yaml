@@ -17,7 +17,7 @@ spec:
         kubernetes.io/hostname: yeager
       containers:
         - name: infisical
-          image: infisical/infisical:latest@sha256:7edde35ad2a4c008f0687b95be92620459482b22ef91c70180aaf34784f050aa
+          image: infisical/infisical:latest@sha256:1a8ed5e889988b37ffb439d67677de5f42b4864236a9c76fbfa9a097676daabd
           ports:
             - containerPort: 8080
               name: http
