@@ -1150,7 +1150,7 @@ async function startSupervisor() {
     await ensureComputerImage();
     await ensureRestrictedEgressEnforced();
   }
-  const logger = createRootLogger(SERVICE_NAMES.supervisor);
+  const logger = await createRootLogger(SERVICE_NAMES.supervisor);
   // Resolve the ceilings before binding the port. They are otherwise parsed inside
   // containerCreateOptions, so a malformed RAKAZO_COMPUTER_* value would let the supervisor start
   // and pass its healthcheck, then fail the first POST /computers with a 500 that reads like a
