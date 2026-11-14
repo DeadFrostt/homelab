@@ -26,9 +26,9 @@ spec:
       serviceAccountName: tailscale
       automountServiceAccountToken: true
       hostNetwork: true
-      # Host resolver, not cluster DNS: these pods reach each other on 127.0.0.1 and
-      # need only public names, and CoreDNS on this node intermittently times out.
-      dnsPolicy: Default
+      # Cluster DNS: the tailscale sidecar reaches the API server as
+      # kubernetes.default.svc to persist its state Secret.
+      dnsPolicy: ClusterFirstWithHostNet
       nodeSelector:
         kubernetes.io/hostname: ackermann
       terminationGracePeriodSeconds: 120
