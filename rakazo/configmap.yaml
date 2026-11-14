@@ -21,10 +21,12 @@ data:
   SANDBOX_DATA_VOLUME: rakazo-trial_appdata
   SANDBOX_DATA_HOST_PATH: /var/lib/docker/volumes/rakazo-trial_appdata/_data
   RAKAZO_COMPUTER_IMAGE: ghcr.io/elie222/rakazo/computer@sha256:30ca4eb37fd5b6c5dec32d229d4fc0d5066c6887956bb52f3edb5b6c848db73b
-  RAKAZO_COMPUTER_CPUS: '2'
-  RAKAZO_COMPUTER_MEMORY: 2g
+  RAKAZO_COMPUTER_CPUS: '4'
+  RAKAZO_COMPUTER_MEMORY: 4g
   RAKAZO_COMPUTER_PIDS_LIMIT: '2048'
   SANDBOX_COMPUTER_DNS: 1.1.1.1,1.0.0.1
   SANDBOX_TEAM_SCREEN_LIMIT: '2'
   DOCKER_SOCKET: /var/run/docker.sock
   LOG_FORMAT: json
+  # Fuse against runaway tool loops in a single agent turn (unset = unlimited).
+  MAX_TOOL_CALLS_PER_TURN: '60'
