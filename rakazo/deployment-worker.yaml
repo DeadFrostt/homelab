@@ -23,7 +23,9 @@ spec:
     spec:
       automountServiceAccountToken: false
       hostNetwork: true
-      dnsPolicy: ClusterFirstWithHostNet
+      # Host resolver, not cluster DNS: these pods reach each other on 127.0.0.1 and
+      # need only public names, and CoreDNS on this node intermittently times out.
+      dnsPolicy: Default
       nodeSelector:
         kubernetes.io/hostname: ackermann
       terminationGracePeriodSeconds: 120
