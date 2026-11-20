@@ -41,7 +41,7 @@ spec:
           - 107
       initContainers:
         - name: prepare-computer-image
-          image: ghcr.io/elie222/rakazo/app@sha256:e46e9f39f8a8bd9574d874b88fdcd5aec9b7de9f1407c806f0da16ba93ce52b0
+          image: ghcr.io/elie222/rakazo/app@sha256:a771451af0a789f75165c46e1d4a340ec2e1717208a599c4c7e1b5996e137c1b
           imagePullPolicy: IfNotPresent
           workingDir: /app/infra/sandboxes/supervisor
           command:
@@ -94,7 +94,7 @@ spec:
               mountPath: /var/run/docker.sock
       containers:
         - name: supervisor
-          image: ghcr.io/elie222/rakazo/app@sha256:e46e9f39f8a8bd9574d874b88fdcd5aec9b7de9f1407c806f0da16ba93ce52b0
+          image: ghcr.io/elie222/rakazo/app@sha256:a771451af0a789f75165c46e1d4a340ec2e1717208a599c4c7e1b5996e137c1b
           imagePullPolicy: IfNotPresent
           workingDir: /app
           command:
@@ -222,7 +222,7 @@ spec:
             periodSeconds: 30
             failureThreshold: 5
         - name: tailnet-gateway
-          image: ghcr.io/elie222/rakazo/app@sha256:e46e9f39f8a8bd9574d874b88fdcd5aec9b7de9f1407c806f0da16ba93ce52b0
+          image: ghcr.io/elie222/rakazo/app@sha256:a771451af0a789f75165c46e1d4a340ec2e1717208a599c4c7e1b5996e137c1b
           command: ["node", "/gateway/proxy.cjs"]
           securityContext:
             allowPrivilegeEscalation: false
