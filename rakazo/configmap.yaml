@@ -20,7 +20,7 @@ data:
   SANDBOX_COMPUTER_PROXY: socks5h://172.17.0.1:1056
   SANDBOX_DATA_VOLUME: rakazo-trial_appdata
   SANDBOX_DATA_HOST_PATH: /var/lib/docker/volumes/rakazo-trial_appdata/_data
-  RAKAZO_COMPUTER_IMAGE: ghcr.io/elie222/rakazo/computer@sha256:30ca4eb37fd5b6c5dec32d229d4fc0d5066c6887956bb52f3edb5b6c848db73b
+  RAKAZO_COMPUTER_IMAGE: ghcr.io/elie222/rakazo/computer@sha256:57f8fa7fd1ca4fc60c8b5454ff706d94b9d99171d0a276636ea8ab2c4ac100a6
   RAKAZO_COMPUTER_CPUS: '4'
   RAKAZO_COMPUTER_MEMORY: 4g
   RAKAZO_COMPUTER_PIDS_LIMIT: '2048'
