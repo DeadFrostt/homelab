@@ -36,7 +36,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: worker
-          image: ghcr.io/elie222/rakazo/app@sha256:e46e9f39f8a8bd9574d874b88fdcd5aec9b7de9f1407c806f0da16ba93ce52b0
+          image: ghcr.io/elie222/rakazo/app@sha256:576d3ea30f826a69ab09b7dee4ca4f35514250b19e2182b418131c1397e8c2bc
           imagePullPolicy: IfNotPresent
           workingDir: /app/apps/worker
           command:
