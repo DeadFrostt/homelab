@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: postgresql
-          image: postgres:16@sha256:3950ad7c3148ca2175ef1b6c36c9efbf78957ae8fbe8b3a5d7c35af50500382f
+          image: postgres:16@sha256:ce81150802644ddfac1db4da9e63be6f2a3818aa6ee98a7a28838aeea65dc37a
           ports:
             - containerPort: 5432
               name: postgres
